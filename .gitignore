@@ -1,0 +1,16 @@
+*.8xp
+*.8xk
+*.8xv
+*.bin
+*.lab
+*.gb
+*.gbc
+*.sav
+*.exe
+*.lst
+*.aps
+*.vcxproj.*
+.vs/
+.DS_Store
+Debug/
+Release/

@@ -1,0 +1,7828 @@
+#define bytes_skipped 0
+
+;Make sure LSB of address is not C7, CF, D7, DF
+#macro FIX_LBL
+	#if $ & $E7 == $C7
+		nop
+	#endif
+#endmacro
+
+;Your typical NEXT routine where SP=GBPC. Puts the second byte in E and calls the _B opcode routine.
+#macro NEXT
+	rst 00h
+	.org $+6
+	#define bytes_skipped eval(bytes_skipped+6)
+	;ei
+	;pop hl      ;10cc
+	;di
+	;ld b,h      ;14cc
+	;ld h,d      ;18cc
+	;ld h,(hl)   ;25cc
+	;jp (hl)     ;29cc
+#endmacro
+	
+;Another typical NEXT routine where SP=GBPC+1, B=(GBPC). Calls the normal opcode routine.
+#macro NEXT_B
+	rst 08h
+	.org $+3
+	#define bytes_skipped eval(bytes_skipped+3)
+	;ld l,b      ;4cc
+	;ld h,e      ;8cc
+	;ld h,(hl)   ;15cc
+	;jp (hl)     ;19cc
+#endmacro
+	
+;An optimized NEXT routine where SP=GBPC+1, H=(GBPC). Calls the normal opcode routine.
+#macro NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+#endmacro
+
+;A NEXT routine which allows interrupts to trigger.
+#macro NEXT_INT
+	rst 10h
+	.org $+6
+	#define bytes_skipped eval(bytes_skipped+6)
+	;ei            ;4cc
+	;pop hl        ;14cc
+	;di            ;18cc
+	;ld b,h        ;22cc
+	;ld h,d        ;26cc
+	;ld h,(hl)     ;33cc
+	;jp (hl)       ;37cc
+#endmacro
+
+#define opcodeC9_B opcodeC9
+#define opcodeD9_B opcodeD9
+#define opcodeE9_B opcodeE9
+#define opcodeF3 opcodeF3end
+#define opcodeCB bitcodes
+#define opcodeD3 invalid
+#define opcodeD3_B invalid
+#define opcodeDB invalid
+#define opcodeDB_B invalid
+#define opcodeDD invalid
+#define opcodeDD_B invalid
+#define opcodeE3 invalid
+#define opcodeE3_B invalid
+#define opcodeE4 invalid
+#define opcodeE4_B invalid
+#define opcodeEB invalid
+#define opcodeEB_B invalid
+#define opcodeEC invalid
+#define opcodeEC_B invalid
+#define opcodeED invalid
+#define opcodeED_B invalid
+#define opcodeF4 invalid
+#define opcodeF4_B invalid
+#define opcodeFC invalid
+#define opcodeFC_B invalid
+#define opcodeFD invalid
+#define opcodeFD_B invalid
+
+#macro insert_op(address)
+	#if address&$FF == $00
+		#ifndef opcode00
+			fill_to(address)
+#define opcode00 eval($)
+	;nop
+	NEXT
+		#else
+			#ifndef opcode00_B
+				fill_to(address)
+#define opcode00_B eval($)
+	;nop
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $01
+		#ifndef opcode01
+			fill_to(address)
+#define opcode01 eval($)
+	;ld bc,NN
+	exx
+	pop bc
+	exx
+	NEXT
+		#else
+			#ifndef opcode01_B
+				fill_to(address)
+#define opcode01_B eval($)
+	;ld bc,NN
+	dec sp
+	exx
+	pop bc
+	exx
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $02
+		#ifndef opcode02
+			fill_to(address)
+#define opcode02 eval($)
+	;ld (bc),a
+	exx
+	ld (bc),a
+	exx
+	NEXT
+		#else
+			#ifndef opcode02_B
+				fill_to(address)
+#define opcode02_B eval($)
+	;ld (bc),a
+	exx
+	ld (bc),a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $03
+		#ifndef opcode03
+			fill_to(address)
+#define opcode03 eval($)
+	;inc bc
+	exx
+	inc bc
+	exx
+	NEXT
+		#else
+			#ifndef opcode03_B
+				fill_to(address)
+#define opcode03_B eval($)
+	;inc bc
+	exx
+	inc bc
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $04
+		#ifndef opcode04
+			fill_to(address)
+#define opcode04 eval($)
+	;inc b
+	exx
+	inc b
+	exx
+	NEXT
+		#else
+			#ifndef opcode04_B
+				fill_to(address)
+#define opcode04_B eval($)
+	;inc b
+	exx
+	inc b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $05
+		#ifndef opcode05
+			fill_to(address)
+#define opcode05 eval($)
+	;dec b
+	exx
+	dec b
+	exx
+	NEXT
+		#else
+			#ifndef opcode05_B
+				fill_to(address)
+#define opcode05_B eval($)
+	;dec b
+	exx
+	dec b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $06
+		#ifndef opcode06
+			fill_to(address)
+#define opcode06 eval($)
+	;ld b,N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	ld b,a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode06_B
+				fill_to(address)
+#define opcode06_B eval($)
+	;ld b,N
+	ex af,af'
+	ld a,b
+	exx
+	ld b,a
+	exx
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $07
+		#ifndef opcode07
+			fill_to(address)
+#define opcode07 eval($)
+	;rlca
+	rlca
+	NEXT
+		#else
+			#ifndef opcode07_B
+				fill_to(address)
+#define opcode07_B eval($)
+	;rlca
+	rlca
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $08
+		#ifndef opcode08
+			fill_to(address)
+#define opcode08 eval($)
+	;ld (nnnn),sp
+	pop hl
+	ld (_+2),hl
+_
+	ld (0),iy
+	NEXT
+		#else
+			#ifndef opcode08_B
+				fill_to(address)
+#define opcode08_B eval($)
+	;ld (nnnn),sp
+	dec sp
+	pop hl
+	ld (_+2),hl
+_
+	ld (0),iy
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $09
+		#ifndef opcode09
+			fill_to(address)
+#define opcode09 eval($)
+	;add hl,bc
+	exx
+	add hl,bc
+	exx
+	NEXT
+		#else
+			#ifndef opcode09_B
+				fill_to(address)
+#define opcode09_B eval($)
+	;add hl,bc
+	exx
+	add hl,bc
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $0A
+		#ifndef opcode0A
+			fill_to(address)
+#define opcode0A eval($)
+	;ld a,(bc)
+	exx
+	ld a,(bc)
+	exx
+	NEXT
+		#else
+			#ifndef opcode0A_B
+				fill_to(address)
+#define opcode0A_B eval($)
+	;ld a,(bc)
+	exx
+	ld a,(bc)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $0B
+		#ifndef opcode0B
+			fill_to(address)
+#define opcode0B eval($)
+	;dec bc
+	exx
+	dec bc
+	exx
+	NEXT
+		#else
+			#ifndef opcode0B_B
+				fill_to(address)
+#define opcode0B_B eval($)
+	;dec bc
+	exx
+	dec bc
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $0C
+		#ifndef opcode0C
+			fill_to(address)
+#define opcode0C eval($)
+	;inc c
+	exx
+	inc c
+	exx
+	NEXT
+		#else
+			#ifndef opcode0C_B
+				fill_to(address)
+#define opcode0C_B eval($)
+	;inc c
+	exx
+	inc c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $0D
+		#ifndef opcode0D
+			fill_to(address)
+#define opcode0D eval($)
+	;dec c
+	exx
+	dec c
+	exx
+	NEXT
+		#else
+			#ifndef opcode0D_B
+				fill_to(address)
+#define opcode0D_B eval($)
+	;dec c
+	exx
+	dec c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $0E
+		#ifndef opcode0E
+			fill_to(address)
+#define opcode0E eval($)
+	;ld c,N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	ld c,a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode0E_B
+				fill_to(address)
+#define opcode0E_B eval($)
+	;ld c,N
+	ex af,af'
+	ld a,b
+	exx
+	ld c,a
+	exx
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $0F
+		#ifndef opcode0F
+			fill_to(address)
+#define opcode0F eval($)
+	;rrca
+	rrca
+	NEXT
+		#else
+			#ifndef opcode0F_B
+				fill_to(address)
+#define opcode0F_B eval($)
+	;rrca
+	rrca
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $10
+		#ifndef opcode10
+			fill_to(address)
+#define opcode10 eval($)
+	;stop
+	pop hl
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode10_B
+				fill_to(address)
+#define opcode10_B eval($)
+	;stop
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $11
+		#ifndef opcode11
+			fill_to(address)
+#define opcode11 eval($)
+	;ld de,NN
+	exx
+	pop de
+	exx
+	NEXT
+		#else
+			#ifndef opcode11_B
+				fill_to(address)
+#define opcode11_B eval($)
+	;ld de,NN
+	dec sp
+	exx
+	pop de
+	exx
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $12
+		#ifndef opcode12
+			fill_to(address)
+#define opcode12 eval($)
+	;ld (de),a
+	exx
+	ld (de),a
+	exx
+	NEXT
+		#else
+			#ifndef opcode12_B
+				fill_to(address)
+#define opcode12_B eval($)
+	;ld (de),a
+	exx
+	ld (de),a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $13
+		#ifndef opcode13
+			fill_to(address)
+#define opcode13 eval($)
+	;inc de
+	exx
+	inc de
+	exx
+	NEXT
+		#else
+			#ifndef opcode13_B
+				fill_to(address)
+#define opcode13_B eval($)
+	;inc de
+	exx
+	inc de
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $14
+		#ifndef opcode14
+			fill_to(address)
+#define opcode14 eval($)
+	;inc d
+	exx
+	inc d
+	exx
+	NEXT
+		#else
+			#ifndef opcode14_B
+				fill_to(address)
+#define opcode14_B eval($)
+	;inc d
+	exx
+	inc d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $15
+		#ifndef opcode15
+			fill_to(address)
+#define opcode15 eval($)
+	;dec d
+	exx
+	dec d
+	exx
+	NEXT
+		#else
+			#ifndef opcode15_B
+				fill_to(address)
+#define opcode15_B eval($)
+	;dec d
+	exx
+	dec d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $16
+		#ifndef opcode16
+			fill_to(address)
+#define opcode16 eval($)
+	;ld d,N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	ld d,a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode16_B
+				fill_to(address)
+#define opcode16_B eval($)
+	;ld d,N
+	ex af,af'
+	ld a,b
+	exx
+	ld d,a
+	exx
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $17
+		#ifndef opcode17
+			fill_to(address)
+#define opcode17 eval($)
+	;rla
+	rla
+	NEXT
+		#else
+			#ifndef opcode17_B
+				fill_to(address)
+#define opcode17_B eval($)
+	;rla
+	rla
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $18
+		#ifndef opcode18
+			fill_to(address)
+#define opcode18 eval($)
+	;jr N
+	ex af,af'
+	pop hl
+	dec sp
+	ld a,l
+	rla
+	sbc a,a
+	ld h,a
+	add hl,sp
+	ex af,af'
+	ld sp,hl
+	NEXT_INT
+		#else
+			#ifndef opcode18_B
+				fill_to(address)
+#define opcode18_B eval($)
+	;jr N
+	ex af,af'
+	ld l,b
+	ld a,l
+	rla
+	sbc a,a
+	ld h,a
+	add hl,sp
+	ex af,af'
+	ld sp,hl
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $19
+		#ifndef opcode19
+			fill_to(address)
+#define opcode19 eval($)
+	;add hl,de
+	exx
+	add hl,de
+	exx
+	NEXT
+		#else
+			#ifndef opcode19_B
+				fill_to(address)
+#define opcode19_B eval($)
+	;add hl,de
+	exx
+	add hl,de
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $1A
+		#ifndef opcode1A
+			fill_to(address)
+#define opcode1A eval($)
+	;ld a,(de)
+	exx
+	ld a,(de)
+	exx
+	NEXT
+		#else
+			#ifndef opcode1A_B
+				fill_to(address)
+#define opcode1A_B eval($)
+	;ld a,(de)
+	exx
+	ld a,(de)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $1B
+		#ifndef opcode1B
+			fill_to(address)
+#define opcode1B eval($)
+	;dec de
+	exx
+	dec de
+	exx
+	NEXT
+		#else
+			#ifndef opcode1B_B
+				fill_to(address)
+#define opcode1B_B eval($)
+	;dec de
+	exx
+	dec de
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $1C
+		#ifndef opcode1C
+			fill_to(address)
+#define opcode1C eval($)
+	;inc e
+	exx
+	inc e
+	exx
+	NEXT
+		#else
+			#ifndef opcode1C_B
+				fill_to(address)
+#define opcode1C_B eval($)
+	;inc e
+	exx
+	inc e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $1D
+		#ifndef opcode1D
+			fill_to(address)
+#define opcode1D eval($)
+	;dec e
+	exx
+	dec e
+	exx
+	NEXT
+		#else
+			#ifndef opcode1D_B
+				fill_to(address)
+#define opcode1D_B eval($)
+	;dec e
+	exx
+	dec e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $1E
+		#ifndef opcode1E
+			fill_to(address)
+#define opcode1E eval($)
+	;ld e,N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	ld e,a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode1E_B
+				fill_to(address)
+#define opcode1E_B eval($)
+	;ld e,N
+	ex af,af'
+	ld a,b
+	exx
+	ld e,a
+	exx
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $1F
+		#ifndef opcode1F
+			fill_to(address)
+#define opcode1F eval($)
+	;rra
+	rra
+	NEXT
+		#else
+			#ifndef opcode1F_B
+				fill_to(address)
+#define opcode1F_B eval($)
+	;rra
+	rra
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $20
+		#ifndef opcode20
+			fill_to(address)
+#define opcode20 eval($)
+	;jr nz,N
+	jp nz,opcode18
+	inc sp
+	NEXT_INT
+		#else
+			#ifndef opcode20_B
+				fill_to(address)
+#define opcode20_B eval($)
+	;jr nz,N
+	jp nz,opcode18_B
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $21
+		#ifndef opcode21
+			fill_to(address)
+#define opcode21 eval($)
+	;ld hl,NN
+	exx
+	pop hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode21_B
+				fill_to(address)
+#define opcode21_B eval($)
+	;ld hl,NN
+	dec sp
+	exx
+	pop hl
+	exx
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $22
+		#ifndef opcode22
+			fill_to(address)
+#define opcode22 eval($)
+	;ld (hl+),a
+	exx
+	ld (hl),a
+	inc hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode22_B
+				fill_to(address)
+#define opcode22_B eval($)
+	;ld (hl+),a
+	exx
+	ld (hl),a
+	inc hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $23
+		#ifndef opcode23
+			fill_to(address)
+#define opcode23 eval($)
+	;inc hl
+	exx
+	inc hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode23_B
+				fill_to(address)
+#define opcode23_B eval($)
+	;inc hl
+	exx
+	inc hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $24
+		#ifndef opcode24
+			fill_to(address)
+#define opcode24 eval($)
+	;inc h
+	exx
+	inc h
+	exx
+	NEXT
+		#else
+			#ifndef opcode24_B
+				fill_to(address)
+#define opcode24_B eval($)
+	;inc h
+	exx
+	inc h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $25
+		#ifndef opcode25
+			fill_to(address)
+#define opcode25 eval($)
+	;dec h
+	exx
+	dec h
+	exx
+	NEXT
+		#else
+			#ifndef opcode25_B
+				fill_to(address)
+#define opcode25_B eval($)
+	;dec h
+	exx
+	dec h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $26
+		#ifndef opcode26
+			fill_to(address)
+#define opcode26 eval($)
+	;ld h,N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	ld h,a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode26_B
+				fill_to(address)
+#define opcode26_B eval($)
+	;ld h,N
+	ex af,af'
+	ld a,b
+	exx
+	ld h,a
+	exx
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $27
+		#ifndef opcode27
+			fill_to(address)
+#define opcode27 eval($)
+	;daa
+	daa
+	NEXT
+		#else
+			#ifndef opcode27_B
+				fill_to(address)
+#define opcode27_B eval($)
+	;daa
+	daa
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $28
+		#ifndef opcode28
+			fill_to(address)
+#define opcode28 eval($)
+	;jr z,N
+	jp z,opcode18
+	inc sp
+	NEXT_INT
+		#else
+			#ifndef opcode28_B
+				fill_to(address)
+#define opcode28_B eval($)
+	;jr z,N
+	jp z,opcode18_B
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $29
+		#ifndef opcode29
+			fill_to(address)
+#define opcode29 eval($)
+	;add hl,hl
+	exx
+	add hl,hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode29_B
+				fill_to(address)
+#define opcode29_B eval($)
+	;add hl,hl
+	exx
+	add hl,hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $2A
+		#ifndef opcode2A
+			fill_to(address)
+#define opcode2A eval($)
+	;ld a,(hl+)
+	exx
+	ld a,(hl)
+	inc hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode2A_B
+				fill_to(address)
+#define opcode2A_B eval($)
+	;ld a,(hl+)
+	exx
+	ld a,(hl)
+	inc hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $2B
+		#ifndef opcode2B
+			fill_to(address)
+#define opcode2B eval($)
+	;dec hl
+	exx
+	dec hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode2B_B
+				fill_to(address)
+#define opcode2B_B eval($)
+	;dec hl
+	exx
+	dec hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $2C
+		#ifndef opcode2C
+			fill_to(address)
+#define opcode2C eval($)
+	;inc l
+	exx
+	inc l
+	exx
+	NEXT
+		#else
+			#ifndef opcode2C_B
+				fill_to(address)
+#define opcode2C_B eval($)
+	;inc l
+	exx
+	inc l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $2D
+		#ifndef opcode2D
+			fill_to(address)
+#define opcode2D eval($)
+	;dec l
+	exx
+	dec l
+	exx
+	NEXT
+		#else
+			#ifndef opcode2D_B
+				fill_to(address)
+#define opcode2D_B eval($)
+	;dec l
+	exx
+	dec l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $2E
+		#ifndef opcode2E
+			fill_to(address)
+#define opcode2E eval($)
+	;ld l,N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	ld l,a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode2E_B
+				fill_to(address)
+#define opcode2E_B eval($)
+	;ld l,N
+	ex af,af'
+	ld a,b
+	exx
+	ld l,a
+	exx
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $2F
+		#ifndef opcode2F
+			fill_to(address)
+#define opcode2F eval($)
+	;cpl
+	cpl
+	NEXT
+		#else
+			#ifndef opcode2F_B
+				fill_to(address)
+#define opcode2F_B eval($)
+	;cpl
+	cpl
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $30
+		#ifndef opcode30
+			fill_to(address)
+#define opcode30 eval($)
+	;jr nc,N
+	jp nc,opcode18
+	inc sp
+	NEXT_INT
+		#else
+			#ifndef opcode30_B
+				fill_to(address)
+#define opcode30_B eval($)
+	;jr nc,N
+	jp nc,opcode18_B
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $31
+		#ifndef opcode31
+			fill_to(address)
+#define opcode31 eval($)
+	;ld sp,NN
+	pop iy
+	NEXT
+		#else
+			#ifndef opcode31_B
+				fill_to(address)
+#define opcode31_B eval($)
+	;ld sp,NN
+	dec sp
+	pop iy
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $32
+		#ifndef opcode32
+			fill_to(address)
+#define opcode32 eval($)
+	;ld (hl-),a
+	exx
+	ld (hl),a
+	dec hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode32_B
+				fill_to(address)
+#define opcode32_B eval($)
+	;ld (hl-),a
+	exx
+	ld (hl),a
+	dec hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $33
+		#ifndef opcode33
+			fill_to(address)
+#define opcode33 eval($)
+	;inc sp
+	inc iy
+	NEXT
+		#else
+			#ifndef opcode33_B
+				fill_to(address)
+#define opcode33_B eval($)
+	;inc sp
+	inc iy
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $34
+		#ifndef opcode34
+			fill_to(address)
+#define opcode34 eval($)
+	;inc (hl)
+	exx
+	inc (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode34_B
+				fill_to(address)
+#define opcode34_B eval($)
+	;inc (hl)
+	exx
+	inc (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $35
+		#ifndef opcode35
+			fill_to(address)
+#define opcode35 eval($)
+	;dec (hl)
+	exx
+	dec (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode35_B
+				fill_to(address)
+#define opcode35_B eval($)
+	;dec (hl)
+	exx
+	dec (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $36
+		#ifndef opcode36
+			fill_to(address)
+#define opcode36 eval($)
+	;ld (hl),N
+	ex af,af'
+	pop hl
+	ld a,l
+	exx
+	bit 7,h
+	jr z,_
+	ld (hl),a
+	exx
+	ex af,af'
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+_
+	dec sp
+	ld a,h
+	exx
+	ld h,a
+	jp memcontrol
+		#else
+			#ifndef opcode36_B
+				fill_to(address)
+#define opcode36_B eval($)
+	;ld (hl),N
+	ex af,af'
+	ld a,b
+	exx
+	bit 7,h
+	jr z,_
+	ld (hl),a
+	exx
+	ex af,af'
+	NEXT
+_
+	ld a,h
+	exx
+	ld h,a
+	ld l,b
+	jp memcontrol
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $37
+		#ifndef opcode37
+			fill_to(address)
+#define opcode37 eval($)
+	;scf
+	scf
+	NEXT
+		#else
+			#ifndef opcode37_B
+				fill_to(address)
+#define opcode37_B eval($)
+	;scf
+	scf
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $38
+		#ifndef opcode38
+			fill_to(address)
+#define opcode38 eval($)
+	;jr c,N
+	jp c,opcode18
+	inc sp
+	NEXT_INT
+		#else
+			#ifndef opcode38_B
+				fill_to(address)
+#define opcode38_B eval($)
+	;jr c,N
+	jp c,opcode18_B
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $39
+		#ifndef opcode39
+			fill_to(address)
+#define opcode39 eval($)
+	;add hl,sp
+	ld hl,0
+	add hl,sp
+	ld sp,iy
+	exx
+	add hl,sp
+	exx
+	ld sp,hl
+	NEXT
+		#else
+			#ifndef opcode39_B
+				fill_to(address)
+#define opcode39_B eval($)
+	;add hl,sp
+	ld hl,0
+	add hl,sp
+	ld sp,iy
+	exx
+	add hl,sp
+	exx
+	ld sp,hl
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $3A
+		#ifndef opcode3A
+			fill_to(address)
+#define opcode3A eval($)
+	;ld a,(hl-)
+	exx
+	ld a,(hl)
+	dec hl
+	exx
+	NEXT
+		#else
+			#ifndef opcode3A_B
+				fill_to(address)
+#define opcode3A_B eval($)
+	;ld a,(hl-)
+	exx
+	ld a,(hl)
+	dec hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $3B
+		#ifndef opcode3B
+			fill_to(address)
+#define opcode3B eval($)
+	;dec sp
+	dec iy
+	NEXT
+		#else
+			#ifndef opcode3B_B
+				fill_to(address)
+#define opcode3B_B eval($)
+	;dec sp
+	dec iy
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $3C
+		#ifndef opcode3C
+			fill_to(address)
+#define opcode3C eval($)
+	;inc a
+	inc a
+	NEXT
+		#else
+			#ifndef opcode3C_B
+				fill_to(address)
+#define opcode3C_B eval($)
+	;inc a
+	inc a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $3D
+		#ifndef opcode3D
+			fill_to(address)
+#define opcode3D eval($)
+	;dec a
+	dec a
+	NEXT
+		#else
+			#ifndef opcode3D_B
+				fill_to(address)
+#define opcode3D_B eval($)
+	;dec a
+	dec a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $3E
+		#ifndef opcode3E
+			fill_to(address)
+#define opcode3E eval($)
+	;ld a,N
+	pop hl
+	ld a,l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcode3E_B
+				fill_to(address)
+#define opcode3E_B eval($)
+	;ld a,N
+	ld a,b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $3F
+		#ifndef opcode3F
+			fill_to(address)
+#define opcode3F eval($)
+	;ccf
+	ccf
+	NEXT
+		#else
+			#ifndef opcode3F_B
+				fill_to(address)
+#define opcode3F_B eval($)
+	;ccf
+	ccf
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $40
+		#ifndef opcode40
+			fill_to(address)
+#define opcode40 eval($)
+	;ld b,b
+	NEXT
+		#else
+			#ifndef opcode40_B
+				fill_to(address)
+#define opcode40_B eval($)
+	;ld b,b
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $41
+		#ifndef opcode41
+			fill_to(address)
+#define opcode41 eval($)
+	;ld b,c
+	exx
+	ld b,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode41_B
+				fill_to(address)
+#define opcode41_B eval($)
+	;ld b,c
+	exx
+	ld b,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $42
+		#ifndef opcode42
+			fill_to(address)
+#define opcode42 eval($)
+	;ld b,d
+	exx
+	ld b,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode42_B
+				fill_to(address)
+#define opcode42_B eval($)
+	;ld b,d
+	exx
+	ld b,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $43
+		#ifndef opcode43
+			fill_to(address)
+#define opcode43 eval($)
+	;ld b,e
+	exx
+	ld b,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode43_B
+				fill_to(address)
+#define opcode43_B eval($)
+	;ld b,e
+	exx
+	ld b,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $44
+		#ifndef opcode44
+			fill_to(address)
+#define opcode44 eval($)
+	;ld b,h
+	exx
+	ld b,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode44_B
+				fill_to(address)
+#define opcode44_B eval($)
+	;ld b,h
+	exx
+	ld b,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $45
+		#ifndef opcode45
+			fill_to(address)
+#define opcode45 eval($)
+	;ld b,l
+	exx
+	ld b,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode45_B
+				fill_to(address)
+#define opcode45_B eval($)
+	;ld b,l
+	exx
+	ld b,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $46
+		#ifndef opcode46
+			fill_to(address)
+#define opcode46 eval($)
+	;ld b,(hl)
+	exx
+	ld b,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode46_B
+				fill_to(address)
+#define opcode46_B eval($)
+	;ld b,(hl)
+	exx
+	ld b,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $47
+		#ifndef opcode47
+			fill_to(address)
+#define opcode47 eval($)
+	;ld b,a
+	exx
+	ld b,a
+	exx
+	NEXT
+		#else
+			#ifndef opcode47_B
+				fill_to(address)
+#define opcode47_B eval($)
+	;ld b,a
+	exx
+	ld b,a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $48
+		#ifndef opcode48
+			fill_to(address)
+#define opcode48 eval($)
+	;ld c,b
+	exx
+	ld c,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode48_B
+				fill_to(address)
+#define opcode48_B eval($)
+	;ld c,b
+	exx
+	ld c,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $49
+		#ifndef opcode49
+			fill_to(address)
+#define opcode49 eval($)
+	;ld c,c
+	NEXT
+		#else
+			#ifndef opcode49_B
+				fill_to(address)
+#define opcode49_B eval($)
+	;ld c,c
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $4A
+		#ifndef opcode4A
+			fill_to(address)
+#define opcode4A eval($)
+	;ld c,d
+	exx
+	ld c,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode4A_B
+				fill_to(address)
+#define opcode4A_B eval($)
+	;ld c,d
+	exx
+	ld c,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $4B
+		#ifndef opcode4B
+			fill_to(address)
+#define opcode4B eval($)
+	;ld c,e
+	exx
+	ld c,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode4B_B
+				fill_to(address)
+#define opcode4B_B eval($)
+	;ld c,e
+	exx
+	ld c,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $4C
+		#ifndef opcode4C
+			fill_to(address)
+#define opcode4C eval($)
+	;ld c,h
+	exx
+	ld c,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode4C_B
+				fill_to(address)
+#define opcode4C_B eval($)
+	;ld c,h
+	exx
+	ld c,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $4D
+		#ifndef opcode4D
+			fill_to(address)
+#define opcode4D eval($)
+	;ld c,l
+	exx
+	ld c,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode4D_B
+				fill_to(address)
+#define opcode4D_B eval($)
+	;ld c,l
+	exx
+	ld c,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $4E
+		#ifndef opcode4E
+			fill_to(address)
+#define opcode4E eval($)
+	;ld c,(hl)
+	exx
+	ld c,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode4E_B
+				fill_to(address)
+#define opcode4E_B eval($)
+	;ld c,(hl)
+	exx
+	ld c,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $4F
+		#ifndef opcode4F
+			fill_to(address)
+#define opcode4F eval($)
+	;ld c,a
+	exx
+	ld c,a
+	exx
+	NEXT
+		#else
+			#ifndef opcode4F_B
+				fill_to(address)
+#define opcode4F_B eval($)
+	;ld c,a
+	exx
+	ld c,a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $50
+		#ifndef opcode50
+			fill_to(address)
+#define opcode50 eval($)
+	;ld d,b
+	exx
+	ld d,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode50_B
+				fill_to(address)
+#define opcode50_B eval($)
+	;ld d,b
+	exx
+	ld d,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $51
+		#ifndef opcode51
+			fill_to(address)
+#define opcode51 eval($)
+	;ld d,c
+	exx
+	ld d,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode51_B
+				fill_to(address)
+#define opcode51_B eval($)
+	;ld d,c
+	exx
+	ld d,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $52
+		#ifndef opcode52
+			fill_to(address)
+#define opcode52 eval($)
+	;ld d,d
+	NEXT
+		#else
+			#ifndef opcode52_B
+				fill_to(address)
+#define opcode52_B eval($)
+	;ld d,d
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $53
+		#ifndef opcode53
+			fill_to(address)
+#define opcode53 eval($)
+	;ld d,e
+	exx
+	ld d,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode53_B
+				fill_to(address)
+#define opcode53_B eval($)
+	;ld d,e
+	exx
+	ld d,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $54
+		#ifndef opcode54
+			fill_to(address)
+#define opcode54 eval($)
+	;ld d,h
+	exx
+	ld d,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode54_B
+				fill_to(address)
+#define opcode54_B eval($)
+	;ld d,h
+	exx
+	ld d,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $55
+		#ifndef opcode55
+			fill_to(address)
+#define opcode55 eval($)
+	;ld d,l
+	exx
+	ld d,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode55_B
+				fill_to(address)
+#define opcode55_B eval($)
+	;ld d,l
+	exx
+	ld d,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $56
+		#ifndef opcode56
+			fill_to(address)
+#define opcode56 eval($)
+	;ld d,(hl)
+	exx
+	ld d,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode56_B
+				fill_to(address)
+#define opcode56_B eval($)
+	;ld d,(hl)
+	exx
+	ld d,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $57
+		#ifndef opcode57
+			fill_to(address)
+#define opcode57 eval($)
+	;ld d,a
+	exx
+	ld d,a
+	exx
+	NEXT
+		#else
+			#ifndef opcode57_B
+				fill_to(address)
+#define opcode57_B eval($)
+	;ld d,a
+	exx
+	ld d,a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $58
+		#ifndef opcode58
+			fill_to(address)
+#define opcode58 eval($)
+	;ld e,b
+	exx
+	ld e,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode58_B
+				fill_to(address)
+#define opcode58_B eval($)
+	;ld e,b
+	exx
+	ld e,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $59
+		#ifndef opcode59
+			fill_to(address)
+#define opcode59 eval($)
+	;ld e,c
+	exx
+	ld e,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode59_B
+				fill_to(address)
+#define opcode59_B eval($)
+	;ld e,c
+	exx
+	ld e,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $5A
+		#ifndef opcode5A
+			fill_to(address)
+#define opcode5A eval($)
+	;ld e,d
+	exx
+	ld e,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode5A_B
+				fill_to(address)
+#define opcode5A_B eval($)
+	;ld e,d
+	exx
+	ld e,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $5B
+		#ifndef opcode5B
+			fill_to(address)
+#define opcode5B eval($)
+	;ld e,e
+	NEXT
+		#else
+			#ifndef opcode5B_B
+				fill_to(address)
+#define opcode5B_B eval($)
+	;ld e,e
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $5C
+		#ifndef opcode5C
+			fill_to(address)
+#define opcode5C eval($)
+	;ld e,h
+	exx
+	ld e,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode5C_B
+				fill_to(address)
+#define opcode5C_B eval($)
+	;ld e,h
+	exx
+	ld e,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $5D
+		#ifndef opcode5D
+			fill_to(address)
+#define opcode5D eval($)
+	;ld e,l
+	exx
+	ld e,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode5D_B
+				fill_to(address)
+#define opcode5D_B eval($)
+	;ld e,l
+	exx
+	ld e,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $5E
+		#ifndef opcode5E
+			fill_to(address)
+#define opcode5E eval($)
+	;ld e,(hl)
+	exx
+	ld e,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode5E_B
+				fill_to(address)
+#define opcode5E_B eval($)
+	;ld e,(hl)
+	exx
+	ld e,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $5F
+		#ifndef opcode5F
+			fill_to(address)
+#define opcode5F eval($)
+	;ld e,a
+	exx
+	ld e,a
+	exx
+	NEXT
+		#else
+			#ifndef opcode5F_B
+				fill_to(address)
+#define opcode5F_B eval($)
+	;ld e,a
+	exx
+	ld e,a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $60
+		#ifndef opcode60
+			fill_to(address)
+#define opcode60 eval($)
+	;ld h,b
+	exx
+	ld h,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode60_B
+				fill_to(address)
+#define opcode60_B eval($)
+	;ld h,b
+	exx
+	ld h,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $61
+		#ifndef opcode61
+			fill_to(address)
+#define opcode61 eval($)
+	;ld h,c
+	exx
+	ld h,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode61_B
+				fill_to(address)
+#define opcode61_B eval($)
+	;ld h,c
+	exx
+	ld h,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $62
+		#ifndef opcode62
+			fill_to(address)
+#define opcode62 eval($)
+	;ld h,d
+	exx
+	ld h,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode62_B
+				fill_to(address)
+#define opcode62_B eval($)
+	;ld h,d
+	exx
+	ld h,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $63
+		#ifndef opcode63
+			fill_to(address)
+#define opcode63 eval($)
+	;ld h,e
+	exx
+	ld h,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode63_B
+				fill_to(address)
+#define opcode63_B eval($)
+	;ld h,e
+	exx
+	ld h,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $64
+		#ifndef opcode64
+			fill_to(address)
+#define opcode64 eval($)
+	;ld h,h
+	NEXT
+		#else
+			#ifndef opcode64_B
+				fill_to(address)
+#define opcode64_B eval($)
+	;ld h,h
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $65
+		#ifndef opcode65
+			fill_to(address)
+#define opcode65 eval($)
+	;ld h,l
+	exx
+	ld h,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode65_B
+				fill_to(address)
+#define opcode65_B eval($)
+	;ld h,l
+	exx
+	ld h,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $66
+		#ifndef opcode66
+			fill_to(address)
+#define opcode66 eval($)
+	;ld h,(hl)
+	exx
+	ld h,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode66_B
+				fill_to(address)
+#define opcode66_B eval($)
+	;ld h,(hl)
+	exx
+	ld h,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $67
+		#ifndef opcode67
+			fill_to(address)
+#define opcode67 eval($)
+	;ld h,a
+	exx
+	ld h,a
+	exx
+	NEXT
+		#else
+			#ifndef opcode67_B
+				fill_to(address)
+#define opcode67_B eval($)
+	;ld h,a
+	exx
+	ld h,a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $68
+		#ifndef opcode68
+			fill_to(address)
+#define opcode68 eval($)
+	;ld l,b
+	exx
+	ld l,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode68_B
+				fill_to(address)
+#define opcode68_B eval($)
+	;ld l,b
+	exx
+	ld l,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $69
+		#ifndef opcode69
+			fill_to(address)
+#define opcode69 eval($)
+	;ld l,c
+	exx
+	ld l,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode69_B
+				fill_to(address)
+#define opcode69_B eval($)
+	;ld l,c
+	exx
+	ld l,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $6A
+		#ifndef opcode6A
+			fill_to(address)
+#define opcode6A eval($)
+	;ld l,d
+	exx
+	ld l,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode6A_B
+				fill_to(address)
+#define opcode6A_B eval($)
+	;ld l,d
+	exx
+	ld l,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $6B
+		#ifndef opcode6B
+			fill_to(address)
+#define opcode6B eval($)
+	;ld l,e
+	exx
+	ld l,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode6B_B
+				fill_to(address)
+#define opcode6B_B eval($)
+	;ld l,e
+	exx
+	ld l,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $6C
+		#ifndef opcode6C
+			fill_to(address)
+#define opcode6C eval($)
+	;ld l,h
+	exx
+	ld l,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode6C_B
+				fill_to(address)
+#define opcode6C_B eval($)
+	;ld l,h
+	exx
+	ld l,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $6D
+		#ifndef opcode6D
+			fill_to(address)
+#define opcode6D eval($)
+	;ld l,l
+	NEXT
+		#else
+			#ifndef opcode6D_B
+				fill_to(address)
+#define opcode6D_B eval($)
+	;ld l,l
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $6E
+		#ifndef opcode6E
+			fill_to(address)
+#define opcode6E eval($)
+	;ld l,(hl)
+	exx
+	ld l,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode6E_B
+				fill_to(address)
+#define opcode6E_B eval($)
+	;ld l,(hl)
+	exx
+	ld l,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $6F
+		#ifndef opcode6F
+			fill_to(address)
+#define opcode6F eval($)
+	;ld l,a
+	exx
+	ld l,a
+	exx
+	NEXT
+		#else
+			#ifndef opcode6F_B
+				fill_to(address)
+#define opcode6F_B eval($)
+	;ld l,a
+	exx
+	ld l,a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $70
+		#ifndef opcode70
+			fill_to(address)
+#define opcode70 eval($)
+	;ld (hl),b
+	exx
+	ld (hl),b
+	exx
+	NEXT
+		#else
+			#ifndef opcode70_B
+				fill_to(address)
+#define opcode70_B eval($)
+	;ld (hl),b
+	exx
+	ld (hl),b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $71
+		#ifndef opcode71
+			fill_to(address)
+#define opcode71 eval($)
+	;ld (hl),c
+	exx
+	ld (hl),c
+	exx
+	NEXT
+		#else
+			#ifndef opcode71_B
+				fill_to(address)
+#define opcode71_B eval($)
+	;ld (hl),c
+	exx
+	ld (hl),c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $72
+		#ifndef opcode72
+			fill_to(address)
+#define opcode72 eval($)
+	;ld (hl),d
+	exx
+	ld (hl),d
+	exx
+	NEXT
+		#else
+			#ifndef opcode72_B
+				fill_to(address)
+#define opcode72_B eval($)
+	;ld (hl),d
+	exx
+	ld (hl),d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $73
+		#ifndef opcode73
+			fill_to(address)
+#define opcode73 eval($)
+	;ld (hl),e
+	exx
+	ld (hl),e
+	exx
+	NEXT
+		#else
+			#ifndef opcode73_B
+				fill_to(address)
+#define opcode73_B eval($)
+	;ld (hl),e
+	exx
+	ld (hl),e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $74
+		#ifndef opcode74
+			fill_to(address)
+#define opcode74 eval($)
+	;ld (hl),h
+	exx
+	ld (hl),h
+	exx
+	NEXT
+		#else
+			#ifndef opcode74_B
+				fill_to(address)
+#define opcode74_B eval($)
+	;ld (hl),h
+	exx
+	ld (hl),h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $75
+		#ifndef opcode75
+			fill_to(address)
+#define opcode75 eval($)
+	;ld (hl),l
+	exx
+	ld (hl),l
+	exx
+	NEXT
+		#else
+			#ifndef opcode75_B
+				fill_to(address)
+#define opcode75_B eval($)
+	;ld (hl),l
+	exx
+	ld (hl),l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $76
+		#ifndef opcode76
+			fill_to(address)
+#define opcode76 eval($)
+	;halt
+	ex af,af'
+	dec sp
+	jp hardware
+		#else
+			#ifndef opcode76_B
+				fill_to(address)
+#define opcode76_B eval($)
+	;halt
+	dec sp
+	jp opcode76
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $77
+		#ifndef opcode77
+			fill_to(address)
+#define opcode77 eval($)
+	;ld (hl),a
+	exx
+	ld (hl),a
+	exx
+	NEXT
+		#else
+			#ifndef opcode77_B
+				fill_to(address)
+#define opcode77_B eval($)
+	;ld (hl),a
+	exx
+	ld (hl),a
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $78
+		#ifndef opcode78
+			fill_to(address)
+#define opcode78 eval($)
+	;ld a,b
+	exx
+	ld a,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode78_B
+				fill_to(address)
+#define opcode78_B eval($)
+	;ld a,b
+	exx
+	ld a,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $79
+		#ifndef opcode79
+			fill_to(address)
+#define opcode79 eval($)
+	;ld a,c
+	exx
+	ld a,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode79_B
+				fill_to(address)
+#define opcode79_B eval($)
+	;ld a,c
+	exx
+	ld a,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $7A
+		#ifndef opcode7A
+			fill_to(address)
+#define opcode7A eval($)
+	;ld a,d
+	exx
+	ld a,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode7A_B
+				fill_to(address)
+#define opcode7A_B eval($)
+	;ld a,d
+	exx
+	ld a,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $7B
+		#ifndef opcode7B
+			fill_to(address)
+#define opcode7B eval($)
+	;ld a,e
+	exx
+	ld a,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode7B_B
+				fill_to(address)
+#define opcode7B_B eval($)
+	;ld a,e
+	exx
+	ld a,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $7C
+		#ifndef opcode7C
+			fill_to(address)
+#define opcode7C eval($)
+	;ld a,h
+	exx
+	ld a,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode7C_B
+				fill_to(address)
+#define opcode7C_B eval($)
+	;ld a,h
+	exx
+	ld a,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $7D
+		#ifndef opcode7D
+			fill_to(address)
+#define opcode7D eval($)
+	;ld a,l
+	exx
+	ld a,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode7D_B
+				fill_to(address)
+#define opcode7D_B eval($)
+	;ld a,l
+	exx
+	ld a,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $7E
+		#ifndef opcode7E
+			fill_to(address)
+#define opcode7E eval($)
+	;ld a,(hl)
+	exx
+	ld a,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode7E_B
+				fill_to(address)
+#define opcode7E_B eval($)
+	;ld a,(hl)
+	exx
+	ld a,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $7F
+		#ifndef opcode7F
+			fill_to(address)
+#define opcode7F eval($)
+	;ld a,a
+	NEXT
+		#else
+			#ifndef opcode7F_B
+				fill_to(address)
+#define opcode7F_B eval($)
+	;ld a,a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $80
+		#ifndef opcode80
+			fill_to(address)
+#define opcode80 eval($)
+	;add a,b
+	exx
+	add a,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode80_B
+				fill_to(address)
+#define opcode80_B eval($)
+	;add a,b
+	exx
+	add a,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $81
+		#ifndef opcode81
+			fill_to(address)
+#define opcode81 eval($)
+	;add a,c
+	exx
+	add a,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode81_B
+				fill_to(address)
+#define opcode81_B eval($)
+	;add a,c
+	exx
+	add a,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $82
+		#ifndef opcode82
+			fill_to(address)
+#define opcode82 eval($)
+	;add a,d
+	exx
+	add a,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode82_B
+				fill_to(address)
+#define opcode82_B eval($)
+	;add a,d
+	exx
+	add a,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $83
+		#ifndef opcode83
+			fill_to(address)
+#define opcode83 eval($)
+	;add a,e
+	exx
+	add a,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode83_B
+				fill_to(address)
+#define opcode83_B eval($)
+	;add a,e
+	exx
+	add a,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $84
+		#ifndef opcode84
+			fill_to(address)
+#define opcode84 eval($)
+	;add a,h
+	exx
+	add a,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode84_B
+				fill_to(address)
+#define opcode84_B eval($)
+	;add a,h
+	exx
+	add a,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $85
+		#ifndef opcode85
+			fill_to(address)
+#define opcode85 eval($)
+	;add a,l
+	exx
+	add a,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode85_B
+				fill_to(address)
+#define opcode85_B eval($)
+	;add a,l
+	exx
+	add a,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $86
+		#ifndef opcode86
+			fill_to(address)
+#define opcode86 eval($)
+	;add a,(hl)
+	exx
+	add a,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode86_B
+				fill_to(address)
+#define opcode86_B eval($)
+	;add a,(hl)
+	exx
+	add a,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $87
+		#ifndef opcode87
+			fill_to(address)
+#define opcode87 eval($)
+	;add a,a
+	add a,a
+	NEXT
+		#else
+			#ifndef opcode87_B
+				fill_to(address)
+#define opcode87_B eval($)
+	;add a,a
+	add a,a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $88
+		#ifndef opcode88
+			fill_to(address)
+#define opcode88 eval($)
+	;adc a,b
+	exx
+	adc a,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode88_B
+				fill_to(address)
+#define opcode88_B eval($)
+	;adc a,b
+	exx
+	adc a,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $89
+		#ifndef opcode89
+			fill_to(address)
+#define opcode89 eval($)
+	;adc a,c
+	exx
+	adc a,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode89_B
+				fill_to(address)
+#define opcode89_B eval($)
+	;adc a,c
+	exx
+	adc a,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $8A
+		#ifndef opcode8A
+			fill_to(address)
+#define opcode8A eval($)
+	;adc a,d
+	exx
+	adc a,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode8A_B
+				fill_to(address)
+#define opcode8A_B eval($)
+	;adc a,d
+	exx
+	adc a,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $8B
+		#ifndef opcode8B
+			fill_to(address)
+#define opcode8B eval($)
+	;adc a,e
+	exx
+	adc a,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode8B_B
+				fill_to(address)
+#define opcode8B_B eval($)
+	;adc a,e
+	exx
+	adc a,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $8C
+		#ifndef opcode8C
+			fill_to(address)
+#define opcode8C eval($)
+	;adc a,h
+	exx
+	adc a,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode8C_B
+				fill_to(address)
+#define opcode8C_B eval($)
+	;adc a,h
+	exx
+	adc a,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $8D
+		#ifndef opcode8D
+			fill_to(address)
+#define opcode8D eval($)
+	;adc a,l
+	exx
+	adc a,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode8D_B
+				fill_to(address)
+#define opcode8D_B eval($)
+	;adc a,l
+	exx
+	adc a,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $8E
+		#ifndef opcode8E
+			fill_to(address)
+#define opcode8E eval($)
+	;adc a,(hl)
+	exx
+	adc a,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode8E_B
+				fill_to(address)
+#define opcode8E_B eval($)
+	;adc a,(hl)
+	exx
+	adc a,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $8F
+		#ifndef opcode8F
+			fill_to(address)
+#define opcode8F eval($)
+	;adc a,a
+	adc a,a
+	NEXT
+		#else
+			#ifndef opcode8F_B
+				fill_to(address)
+#define opcode8F_B eval($)
+	;adc a,a
+	adc a,a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $90
+		#ifndef opcode90
+			fill_to(address)
+#define opcode90 eval($)
+	;sub b
+	exx
+	sub b
+	exx
+	NEXT
+		#else
+			#ifndef opcode90_B
+				fill_to(address)
+#define opcode90_B eval($)
+	;sub b
+	exx
+	sub b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $91
+		#ifndef opcode91
+			fill_to(address)
+#define opcode91 eval($)
+	;sub c
+	exx
+	sub c
+	exx
+	NEXT
+		#else
+			#ifndef opcode91_B
+				fill_to(address)
+#define opcode91_B eval($)
+	;sub c
+	exx
+	sub c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $92
+		#ifndef opcode92
+			fill_to(address)
+#define opcode92 eval($)
+	;sub d
+	exx
+	sub d
+	exx
+	NEXT
+		#else
+			#ifndef opcode92_B
+				fill_to(address)
+#define opcode92_B eval($)
+	;sub d
+	exx
+	sub d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $93
+		#ifndef opcode93
+			fill_to(address)
+#define opcode93 eval($)
+	;sub e
+	exx
+	sub e
+	exx
+	NEXT
+		#else
+			#ifndef opcode93_B
+				fill_to(address)
+#define opcode93_B eval($)
+	;sub e
+	exx
+	sub e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $94
+		#ifndef opcode94
+			fill_to(address)
+#define opcode94 eval($)
+	;sub h
+	exx
+	sub h
+	exx
+	NEXT
+		#else
+			#ifndef opcode94_B
+				fill_to(address)
+#define opcode94_B eval($)
+	;sub h
+	exx
+	sub h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $95
+		#ifndef opcode95
+			fill_to(address)
+#define opcode95 eval($)
+	;sub l
+	exx
+	sub l
+	exx
+	NEXT
+		#else
+			#ifndef opcode95_B
+				fill_to(address)
+#define opcode95_B eval($)
+	;sub l
+	exx
+	sub l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $96
+		#ifndef opcode96
+			fill_to(address)
+#define opcode96 eval($)
+	;sub (hl)
+	exx
+	sub (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode96_B
+				fill_to(address)
+#define opcode96_B eval($)
+	;sub (hl)
+	exx
+	sub (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $97
+		#ifndef opcode97
+			fill_to(address)
+#define opcode97 eval($)
+	;sub a
+	sub a
+	NEXT
+		#else
+			#ifndef opcode97_B
+				fill_to(address)
+#define opcode97_B eval($)
+	;sub a
+	sub a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $98
+		#ifndef opcode98
+			fill_to(address)
+#define opcode98 eval($)
+	;sbc a,b
+	exx
+	sbc a,b
+	exx
+	NEXT
+		#else
+			#ifndef opcode98_B
+				fill_to(address)
+#define opcode98_B eval($)
+	;sbc a,b
+	exx
+	sbc a,b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $99
+		#ifndef opcode99
+			fill_to(address)
+#define opcode99 eval($)
+	;sbc a,c
+	exx
+	sbc a,c
+	exx
+	NEXT
+		#else
+			#ifndef opcode99_B
+				fill_to(address)
+#define opcode99_B eval($)
+	;sbc a,c
+	exx
+	sbc a,c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $9A
+		#ifndef opcode9A
+			fill_to(address)
+#define opcode9A eval($)
+	;sbc a,d
+	exx
+	sbc a,d
+	exx
+	NEXT
+		#else
+			#ifndef opcode9A_B
+				fill_to(address)
+#define opcode9A_B eval($)
+	;sbc a,d
+	exx
+	sbc a,d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $9B
+		#ifndef opcode9B
+			fill_to(address)
+#define opcode9B eval($)
+	;sbc a,e
+	exx
+	sbc a,e
+	exx
+	NEXT
+		#else
+			#ifndef opcode9B_B
+				fill_to(address)
+#define opcode9B_B eval($)
+	;sbc a,e
+	exx
+	sbc a,e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $9C
+		#ifndef opcode9C
+			fill_to(address)
+#define opcode9C eval($)
+	;sbc a,h
+	exx
+	sbc a,h
+	exx
+	NEXT
+		#else
+			#ifndef opcode9C_B
+				fill_to(address)
+#define opcode9C_B eval($)
+	;sbc a,h
+	exx
+	sbc a,h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $9D
+		#ifndef opcode9D
+			fill_to(address)
+#define opcode9D eval($)
+	;sbc a,l
+	exx
+	sbc a,l
+	exx
+	NEXT
+		#else
+			#ifndef opcode9D_B
+				fill_to(address)
+#define opcode9D_B eval($)
+	;sbc a,l
+	exx
+	sbc a,l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $9E
+		#ifndef opcode9E
+			fill_to(address)
+#define opcode9E eval($)
+	;sbc a,(hl)
+	exx
+	sbc a,(hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcode9E_B
+				fill_to(address)
+#define opcode9E_B eval($)
+	;sbc a,(hl)
+	exx
+	sbc a,(hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $9F
+		#ifndef opcode9F
+			fill_to(address)
+#define opcode9F eval($)
+	;sbc a,a
+	sbc a,a
+	NEXT
+		#else
+			#ifndef opcode9F_B
+				fill_to(address)
+#define opcode9F_B eval($)
+	;sbc a,a
+	sbc a,a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $A0
+		#ifndef opcodeA0
+			fill_to(address)
+#define opcodeA0 eval($)
+	;and b
+	exx
+	and b
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA0_B
+				fill_to(address)
+#define opcodeA0_B eval($)
+	;and b
+	exx
+	and b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A1
+		#ifndef opcodeA1
+			fill_to(address)
+#define opcodeA1 eval($)
+	;and c
+	exx
+	and c
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA1_B
+				fill_to(address)
+#define opcodeA1_B eval($)
+	;and c
+	exx
+	and c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A2
+		#ifndef opcodeA2
+			fill_to(address)
+#define opcodeA2 eval($)
+	;and d
+	exx
+	and d
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA2_B
+				fill_to(address)
+#define opcodeA2_B eval($)
+	;and d
+	exx
+	and d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A3
+		#ifndef opcodeA3
+			fill_to(address)
+#define opcodeA3 eval($)
+	;and e
+	exx
+	and e
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA3_B
+				fill_to(address)
+#define opcodeA3_B eval($)
+	;and e
+	exx
+	and e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A4
+		#ifndef opcodeA4
+			fill_to(address)
+#define opcodeA4 eval($)
+	;and h
+	exx
+	and h
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA4_B
+				fill_to(address)
+#define opcodeA4_B eval($)
+	;and h
+	exx
+	and h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A5
+		#ifndef opcodeA5
+			fill_to(address)
+#define opcodeA5 eval($)
+	;and l
+	exx
+	and l
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA5_B
+				fill_to(address)
+#define opcodeA5_B eval($)
+	;and l
+	exx
+	and l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A6
+		#ifndef opcodeA6
+			fill_to(address)
+#define opcodeA6 eval($)
+	;and (hl)
+	exx
+	and (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA6_B
+				fill_to(address)
+#define opcodeA6_B eval($)
+	;and (hl)
+	exx
+	and (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A7
+		#ifndef opcodeA7
+			fill_to(address)
+#define opcodeA7 eval($)
+	;and a
+	and a
+	NEXT
+		#else
+			#ifndef opcodeA7_B
+				fill_to(address)
+#define opcodeA7_B eval($)
+	;and a
+	and a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A8
+		#ifndef opcodeA8
+			fill_to(address)
+#define opcodeA8 eval($)
+	;xor b
+	exx
+	xor b
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA8_B
+				fill_to(address)
+#define opcodeA8_B eval($)
+	;xor b
+	exx
+	xor b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $A9
+		#ifndef opcodeA9
+			fill_to(address)
+#define opcodeA9 eval($)
+	;xor c
+	exx
+	xor c
+	exx
+	NEXT
+		#else
+			#ifndef opcodeA9_B
+				fill_to(address)
+#define opcodeA9_B eval($)
+	;xor c
+	exx
+	xor c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $AA
+		#ifndef opcodeAA
+			fill_to(address)
+#define opcodeAA eval($)
+	;xor d
+	exx
+	xor d
+	exx
+	NEXT
+		#else
+			#ifndef opcodeAA_B
+				fill_to(address)
+#define opcodeAA_B eval($)
+	;xor d
+	exx
+	xor d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $AB
+		#ifndef opcodeAB
+			fill_to(address)
+#define opcodeAB eval($)
+	;xor e
+	exx
+	xor e
+	exx
+	NEXT
+		#else
+			#ifndef opcodeAB_B
+				fill_to(address)
+#define opcodeAB_B eval($)
+	;xor e
+	exx
+	xor e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $AC
+		#ifndef opcodeAC
+			fill_to(address)
+#define opcodeAC eval($)
+	;xor h
+	exx
+	xor h
+	exx
+	NEXT
+		#else
+			#ifndef opcodeAC_B
+				fill_to(address)
+#define opcodeAC_B eval($)
+	;xor h
+	exx
+	xor h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $AD
+		#ifndef opcodeAD
+			fill_to(address)
+#define opcodeAD eval($)
+	;xor l
+	exx
+	xor l
+	exx
+	NEXT
+		#else
+			#ifndef opcodeAD_B
+				fill_to(address)
+#define opcodeAD_B eval($)
+	;xor l
+	exx
+	xor l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $AE
+		#ifndef opcodeAE
+			fill_to(address)
+#define opcodeAE eval($)
+	;xor (hl)
+	exx
+	xor (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcodeAE_B
+				fill_to(address)
+#define opcodeAE_B eval($)
+	;xor (hl)
+	exx
+	xor (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $AF
+		#ifndef opcodeAF
+			fill_to(address)
+#define opcodeAF eval($)
+	;xor a
+	xor a
+	NEXT
+		#else
+			#ifndef opcodeAF_B
+				fill_to(address)
+#define opcodeAF_B eval($)
+	;xor a
+	xor a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $B0
+		#ifndef opcodeB0
+			fill_to(address)
+#define opcodeB0 eval($)
+	;or b
+	exx
+	or b
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB0_B
+				fill_to(address)
+#define opcodeB0_B eval($)
+	;or b
+	exx
+	or b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B1
+		#ifndef opcodeB1
+			fill_to(address)
+#define opcodeB1 eval($)
+	;or c
+	exx
+	or c
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB1_B
+				fill_to(address)
+#define opcodeB1_B eval($)
+	;or c
+	exx
+	or c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B2
+		#ifndef opcodeB2
+			fill_to(address)
+#define opcodeB2 eval($)
+	;or d
+	exx
+	or d
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB2_B
+				fill_to(address)
+#define opcodeB2_B eval($)
+	;or d
+	exx
+	or d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B3
+		#ifndef opcodeB3
+			fill_to(address)
+#define opcodeB3 eval($)
+	;or e
+	exx
+	or e
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB3_B
+				fill_to(address)
+#define opcodeB3_B eval($)
+	;or e
+	exx
+	or e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B4
+		#ifndef opcodeB4
+			fill_to(address)
+#define opcodeB4 eval($)
+	;or h
+	exx
+	or h
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB4_B
+				fill_to(address)
+#define opcodeB4_B eval($)
+	;or h
+	exx
+	or h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B5
+		#ifndef opcodeB5
+			fill_to(address)
+#define opcodeB5 eval($)
+	;or l
+	exx
+	or l
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB5_B
+				fill_to(address)
+#define opcodeB5_B eval($)
+	;or l
+	exx
+	or l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B6
+		#ifndef opcodeB6
+			fill_to(address)
+#define opcodeB6 eval($)
+	;or (hl)
+	exx
+	or (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB6_B
+				fill_to(address)
+#define opcodeB6_B eval($)
+	;or (hl)
+	exx
+	or (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B7
+		#ifndef opcodeB7
+			fill_to(address)
+#define opcodeB7 eval($)
+	;or a
+	or a
+	NEXT
+		#else
+			#ifndef opcodeB7_B
+				fill_to(address)
+#define opcodeB7_B eval($)
+	;or a
+	or a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B8
+		#ifndef opcodeB8
+			fill_to(address)
+#define opcodeB8 eval($)
+	;cp b
+	exx
+	cp b
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB8_B
+				fill_to(address)
+#define opcodeB8_B eval($)
+	;cp b
+	exx
+	cp b
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $B9
+		#ifndef opcodeB9
+			fill_to(address)
+#define opcodeB9 eval($)
+	;cp c
+	exx
+	cp c
+	exx
+	NEXT
+		#else
+			#ifndef opcodeB9_B
+				fill_to(address)
+#define opcodeB9_B eval($)
+	;cp c
+	exx
+	cp c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $BA
+		#ifndef opcodeBA
+			fill_to(address)
+#define opcodeBA eval($)
+	;cp d
+	exx
+	cp d
+	exx
+	NEXT
+		#else
+			#ifndef opcodeBA_B
+				fill_to(address)
+#define opcodeBA_B eval($)
+	;cp d
+	exx
+	cp d
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $BB
+		#ifndef opcodeBB
+			fill_to(address)
+#define opcodeBB eval($)
+	;cp e
+	exx
+	cp e
+	exx
+	NEXT
+		#else
+			#ifndef opcodeBB_B
+				fill_to(address)
+#define opcodeBB_B eval($)
+	;cp e
+	exx
+	cp e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $BC
+		#ifndef opcodeBC
+			fill_to(address)
+#define opcodeBC eval($)
+	;cp h
+	exx
+	cp h
+	exx
+	NEXT
+		#else
+			#ifndef opcodeBC_B
+				fill_to(address)
+#define opcodeBC_B eval($)
+	;cp h
+	exx
+	cp h
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $BD
+		#ifndef opcodeBD
+			fill_to(address)
+#define opcodeBD eval($)
+	;cp l
+	exx
+	cp l
+	exx
+	NEXT
+		#else
+			#ifndef opcodeBD_B
+				fill_to(address)
+#define opcodeBD_B eval($)
+	;cp l
+	exx
+	cp l
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $BE
+		#ifndef opcodeBE
+			fill_to(address)
+#define opcodeBE eval($)
+	;cp (hl)
+	exx
+	cp (hl)
+	exx
+	NEXT
+		#else
+			#ifndef opcodeBE_B
+				fill_to(address)
+#define opcodeBE_B eval($)
+	;cp (hl)
+	exx
+	cp (hl)
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $BF
+		#ifndef opcodeBF
+			fill_to(address)
+#define opcodeBF eval($)
+	;cp a
+	cp a
+	NEXT
+		#else
+			#ifndef opcodeBF_B
+				fill_to(address)
+#define opcodeBF_B eval($)
+	;cp a
+	cp a
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $C0
+		#ifndef opcodeC0
+			fill_to(address)
+#define opcodeC0 eval($)
+	;ret nz
+	jp nz,opcodeC9
+	NEXT_INT
+		#else
+			#ifndef opcodeC0_B
+				fill_to(address)
+#define opcodeC0_B eval($)
+	;ret nz
+	jp nz,opcodeC9_B
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C1
+		#ifndef opcodeC1
+			fill_to(address)
+#define opcodeC1 eval($)
+	;pop bc
+	exx
+	ld c,(iy)
+	inc iy
+	ld b,(iy)
+	inc iy
+	exx
+	NEXT
+		#else
+			#ifndef opcodeC1_B
+				fill_to(address)
+#define opcodeC1_B eval($)
+	;pop bc
+	exx
+	ld c,(iy)
+	inc iy
+	ld b,(iy)
+	inc iy
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C2
+		#ifndef opcodeC2
+			fill_to(address)
+#define opcodeC2 eval($)
+	;jp nz,NN
+	jp nz,opcodeC3
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeC2_B
+				fill_to(address)
+#define opcodeC2_B eval($)
+	;jp nz,NN
+	jp nz,opcodeC3_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C3
+		#ifndef opcodeC3
+			fill_to(address)
+#define opcodeC3 eval($)
+	;jp NN
+	pop hl
+	ld sp,hl
+	NEXT_INT
+		#else
+			#ifndef opcodeC3_B
+				fill_to(address)
+#define opcodeC3_B eval($)
+	;jp NN
+	dec sp
+	pop hl
+	ld sp,hl
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C4
+		#ifndef opcodeC4
+			fill_to(address)
+#define opcodeC4 eval($)
+	;call nz,NN
+	jp nz,opcodeCD
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeC4_B
+				fill_to(address)
+#define opcodeC4_B eval($)
+	;call nz,NN
+	jp nz,opcodeCD_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C5
+		#ifndef opcodeC5
+			fill_to(address)
+#define opcodeC5 eval($)
+	;push bc
+	exx
+	dec iy
+	ld (iy),b
+	dec iy
+	ld (iy),c
+	exx
+	NEXT
+		#else
+			#ifndef opcodeC5_B
+				fill_to(address)
+#define opcodeC5_B eval($)
+	;push bc
+	exx
+	dec iy
+	ld (iy),b
+	dec iy
+	ld (iy),c
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C6
+		#ifndef opcodeC6
+			fill_to(address)
+#define opcodeC6 eval($)
+	;add a,N
+	pop hl
+	add a,l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeC6_B
+				fill_to(address)
+#define opcodeC6_B eval($)
+	;add a,N
+	add a,b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C7
+		#ifndef opcodeC7
+			fill_to(address)
+#define opcodeC7 eval($)
+	;rst 00h
+	ld hl,$00
+	jp do_call
+		#else
+			#ifndef opcodeC7_B
+				fill_to(address)
+#define opcodeC7_B eval($)
+	;rst 00h
+	dec sp
+	ld hl,$00
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C8
+		#ifndef opcodeC8
+			fill_to(address)
+#define opcodeC8 eval($)
+	;ret z
+	jp z,opcodeC9
+	NEXT_INT
+		#else
+			#ifndef opcodeC8_B
+				fill_to(address)
+#define opcodeC8_B eval($)
+	;ret z
+	jp z,opcodeC9_B
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $C9
+		#ifndef opcodeC9
+			fill_to(address)
+#define opcodeC9 eval($)
+	;ret
+	ld sp,iy
+	inc iy
+	inc iy
+	pop hl
+	ld sp,hl
+	NEXT_INT
+		#else
+			#ifndef opcodeC9_B
+				fill_to(address)
+#define opcodeC9_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $CA
+		#ifndef opcodeCA
+			fill_to(address)
+#define opcodeCA eval($)
+	;jp z,NN
+	jp z,opcodeC3
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeCA_B
+				fill_to(address)
+#define opcodeCA_B eval($)
+	;jp z,NN
+	jp z,opcodeC3_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $CB
+		#ifndef opcodeCB
+			fill_to(address)
+#define opcodeCB eval($)
+	;empty
+		#else
+			#ifndef opcodeCB_B
+				fill_to(address)
+#define opcodeCB_B eval($)
+	;CB-opcodes
+	ex af,af'
+	ld a,b
+	ld hl,bitcodes_B
+	jp (hl)
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $CC
+		#ifndef opcodeCC
+			fill_to(address)
+#define opcodeCC eval($)
+	;call z,NN
+	jp z,opcodeCD
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeCC_B
+				fill_to(address)
+#define opcodeCC_B eval($)
+	;call z,NN
+	jp z,opcodeCD_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $CD
+		#ifndef opcodeCD
+			fill_to(address)
+#define opcodeCD eval($)
+	;call NN
+	pop hl
+do_call:
+	dec iy
+	dec iy
+	ld (_+2),iy
+_
+	ld (0),sp
+	ld sp,hl
+	NEXT_INT
+		#else
+			#ifndef opcodeCD_B
+				fill_to(address)
+#define opcodeCD_B eval($)
+	;call NN
+	dec sp
+	pop hl
+	dec iy
+	dec iy
+	ld (_+2),iy
+_
+	ld (0),sp
+	ld sp,hl
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $CE
+		#ifndef opcodeCE
+			fill_to(address)
+#define opcodeCE eval($)
+	;adc a,N
+	pop hl
+	adc a,l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeCE_B
+				fill_to(address)
+#define opcodeCE_B eval($)
+	;adc a,N
+	adc a,b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $CF
+		#ifndef opcodeCF
+			fill_to(address)
+#define opcodeCF eval($)
+	;rst 08h
+	ld hl,$08
+	jp do_call
+		#else
+			#ifndef opcodeCF_B
+				fill_to(address)
+#define opcodeCF_B eval($)
+	;rst 08h
+	dec sp
+	ld hl,$08
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $D0
+		#ifndef opcodeD0
+			fill_to(address)
+#define opcodeD0 eval($)
+	;ret nc
+	jp nc,opcodeC9
+	NEXT_INT
+		#else
+			#ifndef opcodeD0_B
+				fill_to(address)
+#define opcodeD0_B eval($)
+	;ret nc
+	jp nc,opcodeC9_B
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D1
+		#ifndef opcodeD1
+			fill_to(address)
+#define opcodeD1 eval($)
+	;pop de
+	exx
+	ld e,(iy)
+	inc iy
+	ld d,(iy)
+	inc iy
+	exx
+	NEXT
+		#else
+			#ifndef opcodeD1_B
+				fill_to(address)
+#define opcodeD1_B eval($)
+	;pop de
+	exx
+	ld e,(iy)
+	inc iy
+	ld d,(iy)
+	inc iy
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D2
+		#ifndef opcodeD2
+			fill_to(address)
+#define opcodeD2 eval($)
+	;jp nc,NN
+	jp nc,opcodeC3
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeD2_B
+				fill_to(address)
+#define opcodeD2_B eval($)
+	;jp nc,NN
+	jp nc,opcodeC3_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D3
+		#ifndef opcodeD3
+			fill_to(address)
+#define opcodeD3 eval($)
+	;empty
+		#else
+			#ifndef opcodeD3_B
+				fill_to(address)
+#define opcodeD3_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D4
+		#ifndef opcodeD4
+			fill_to(address)
+#define opcodeD4 eval($)
+	;call nc,NN
+	jp nc,opcodeCD
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeD4_B
+				fill_to(address)
+#define opcodeD4_B eval($)
+	;call nc,NN
+	jp nc,opcodeCD_B
+	inc sp
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D5
+		#ifndef opcodeD5
+			fill_to(address)
+#define opcodeD5 eval($)
+	;push de
+	exx
+	dec iy
+	ld (iy),d
+	dec iy
+	ld (iy),e
+	exx
+	NEXT
+		#else
+			#ifndef opcodeD5_B
+				fill_to(address)
+#define opcodeD5_B eval($)
+	;push de
+	exx
+	dec iy
+	ld (iy),d
+	dec iy
+	ld (iy),e
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D6
+		#ifndef opcodeD6
+			fill_to(address)
+#define opcodeD6 eval($)
+	;sub N
+	pop hl
+	sub l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeD6_B
+				fill_to(address)
+#define opcodeD6_B eval($)
+	;sub N
+	sub b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D7
+		#ifndef opcodeD7
+			fill_to(address)
+#define opcodeD7 eval($)
+	;rst 10h
+	ld hl,$10
+	jp do_call
+		#else
+			#ifndef opcodeD7_B
+				fill_to(address)
+#define opcodeD7_B eval($)
+	;rst 10h
+	dec sp
+	ld hl,$10
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D8
+		#ifndef opcodeD8
+			fill_to(address)
+#define opcodeD8 eval($)
+	;ret c
+	jp c,opcodeC9
+	NEXT_INT
+		#else
+			#ifndef opcodeD8_B
+				fill_to(address)
+#define opcodeD8_B eval($)
+	;ret c
+	jp c,opcodeC9_B
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $D9
+		#ifndef opcodeD9
+			fill_to(address)
+#define opcodeD9 eval($)
+	;reti
+	ld sp,iy
+	inc iy
+	inc iy
+	pop hl
+	ld sp,hl
+	jp opcodeFB
+		#else
+			#ifndef opcodeD9_B
+				fill_to(address)
+#define opcodeD9_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $DA
+		#ifndef opcodeDA
+			fill_to(address)
+#define opcodeDA eval($)
+	;jp c,NN
+	jp c,opcodeC3
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeDA_B
+				fill_to(address)
+#define opcodeDA_B eval($)
+	;jp c,NN
+	jp c,opcodeC3_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $DB
+		#ifndef opcodeDB
+			fill_to(address)
+#define opcodeDB eval($)
+	;empty
+		#else
+			#ifndef opcodeDB_B
+				fill_to(address)
+#define opcodeDB_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $DC
+		#ifndef opcodeDC
+			fill_to(address)
+#define opcodeDC eval($)
+	;call c,NN
+	jp c,opcodeCD
+	pop hl
+	NEXT_INT
+		#else
+			#ifndef opcodeDC_B
+				fill_to(address)
+#define opcodeDC_B eval($)
+	;call c,NN
+	jp c,opcodeCD_B
+	inc sp
+	NEXT_INT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $DD
+		#ifndef opcodeDD
+			fill_to(address)
+#define opcodeDD eval($)
+	;empty
+		#else
+			#ifndef opcodeDD_B
+				fill_to(address)
+#define opcodeDD_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $DE
+		#ifndef opcodeDE
+			fill_to(address)
+#define opcodeDE eval($)
+	;sbc a,N
+	pop hl
+	sbc a,l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeDE_B
+				fill_to(address)
+#define opcodeDE_B eval($)
+	;sbc a,N
+	sbc a,b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $DF
+		#ifndef opcodeDF
+			fill_to(address)
+#define opcodeDF eval($)
+	;rst 18h
+	ld hl,$18
+	jp do_call
+		#else
+			#ifndef opcodeDF_B
+				fill_to(address)
+#define opcodeDF_B eval($)
+	;rst 18h
+	dec sp
+	ld hl,$18
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $E0
+		#ifndef opcodeE0
+			fill_to(address)
+#define opcodeE0 eval($)
+	;ld ($FF00+N),a
+	ex af,af'
+	dec sp
+	pop af
+	ld l,a
+	ld h,$FF
+	inc a
+	jp p,io_write
+	ex af,af'
+	ld (hl),a
+	NEXT
+		#else
+			#ifndef opcodeE0_B
+				fill_to(address)
+#define opcodeE0_B eval($)
+	;ld ($FF00+N),a
+	ex af,af'
+	ld a,b
+	ld l,a
+	ld h,$FF
+	inc a
+	jp p,io_write
+	ex af,af'
+	ld (hl),a
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E1
+		#ifndef opcodeE1
+			fill_to(address)
+#define opcodeE1 eval($)
+	;pop hl
+	ld (_+1),iy
+	exx
+_
+	ld hl,(0)
+	exx
+	inc iy
+	inc iy
+	NEXT
+		#else
+			#ifndef opcodeE1_B
+				fill_to(address)
+#define opcodeE1_B eval($)
+	;pop hl
+	ld (_+1),iy
+	exx
+_
+	ld hl,(0)
+	exx
+	inc iy
+	inc iy
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E2
+		#ifndef opcodeE2
+			fill_to(address)
+#define opcodeE2 eval($)
+	;ld ($FF00+c),a
+	ex af,af'
+	exx
+	ld a,c
+	exx
+	ld l,a
+	ld h,$FF
+	inc a
+	jp p,io_write
+	ex af,af'
+	ld (hl),a
+	NEXT
+		#else
+			#ifndef opcodeE2_B
+				fill_to(address)
+#define opcodeE2_B eval($)
+	;ld ($FF00+c),a
+	dec sp
+	jp opcodeE2
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E3
+		#ifndef opcodeE3
+			fill_to(address)
+#define opcodeE3 eval($)
+	;empty
+		#else
+			#ifndef opcodeE3_B
+				fill_to(address)
+#define opcodeE3_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E4
+		#ifndef opcodeE4
+			fill_to(address)
+#define opcodeE4 eval($)
+	;empty
+		#else
+			#ifndef opcodeE4_B
+				fill_to(address)
+#define opcodeE4_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E5
+		#ifndef opcodeE5
+			fill_to(address)
+#define opcodeE5 eval($)
+	;push hl
+	dec iy
+	dec iy
+	ld (_+1),iy
+	exx
+_
+	ld (0),hl
+	exx
+	NEXT
+		#else
+			#ifndef opcodeE5_B
+				fill_to(address)
+#define opcodeE5_B eval($)
+	;push hl
+	dec iy
+	dec iy
+	ld (_+1),iy
+	exx
+_
+	ld (0),hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E6
+		#ifndef opcodeE6
+			fill_to(address)
+#define opcodeE6 eval($)
+	;and N
+	pop hl
+	and l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeE6_B
+				fill_to(address)
+#define opcodeE6_B eval($)
+	;and N
+	and b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E7
+		#ifndef opcodeE7
+			fill_to(address)
+#define opcodeE7 eval($)
+	;rst 20h
+	ld hl,$20
+	jp do_call
+		#else
+			#ifndef opcodeE7_B
+				fill_to(address)
+#define opcodeE7_B eval($)
+	;rst 20h
+	dec sp
+	ld hl,$20
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E8
+		#ifndef opcodeE8
+			fill_to(address)
+#define opcodeE8 eval($)
+	;add sp,N
+	ex af,af'
+	pop hl
+	ld b,h
+	ld a,l
+	rla
+	sbc a,a
+	ld h,a
+	ex de,hl
+	add iy,de
+	ex de,hl
+	ex af,af'
+	NEXT_B
+		#else
+			#ifndef opcodeE8_B
+				fill_to(address)
+#define opcodeE8_B eval($)
+	;add sp,N
+	ex af,af'
+	ld l,b
+	ld a,l
+	rla
+	sbc a,a
+	ld h,a
+	ex de,hl
+	add iy,de
+	ex de,hl
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $E9
+		#ifndef opcodeE9
+			fill_to(address)
+#define opcodeE9 eval($)
+	;jp (hl)
+	exx
+	ld sp,hl
+	exx
+	NEXT_INT
+		#else
+			#ifndef opcodeE9_B
+				fill_to(address)
+#define opcodeE9_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $EA
+		#ifndef opcodeEA
+			fill_to(address)
+#define opcodeEA eval($)
+	;ld (NN),a
+	ex af,af'
+	pop hl
+	bit 7,h
+	jr z,_
+	ex af,af'
+	ld (hl),a
+	NEXT
+_
+	ex af,af'
+	ld l,a
+	ex af,af'
+	jp memcontrol
+		#else
+			#ifndef opcodeEA_B
+				fill_to(address)
+#define opcodeEA_B eval($)
+	;ld (NN),a
+	ex af,af'
+	pop hl
+	ld a,l
+	ld l,b
+	ld b,h
+	ld h,a
+	rla
+	jr nc,_
+	ex af,af'
+	ld (hl),a
+	NEXT_B
+_
+	dec sp
+	ex af,af'
+	ld l,a
+	ex af,af'
+	jp memcontrol
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $EB
+		#ifndef opcodeEB
+			fill_to(address)
+#define opcodeEB eval($)
+	;empty
+		#else
+			#ifndef opcodeEB_B
+				fill_to(address)
+#define opcodeEB_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $EC
+		#ifndef opcodeEC
+			fill_to(address)
+#define opcodeEC eval($)
+	;empty
+		#else
+			#ifndef opcodeEC_B
+				fill_to(address)
+#define opcodeEC_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $ED
+		#ifndef opcodeED
+			fill_to(address)
+#define opcodeED eval($)
+	;empty
+		#else
+			#ifndef opcodeED_B
+				fill_to(address)
+#define opcodeED_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $EE
+		#ifndef opcodeEE
+			fill_to(address)
+#define opcodeEE eval($)
+	;xor N
+	pop hl
+	xor l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeEE_B
+				fill_to(address)
+#define opcodeEE_B eval($)
+	;xor N
+	xor b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $EF
+		#ifndef opcodeEF
+			fill_to(address)
+#define opcodeEF eval($)
+	;rst 28h
+	ld hl,$28
+	jp do_call
+		#else
+			#ifndef opcodeEF_B
+				fill_to(address)
+#define opcodeEF_B eval($)
+	;rst 28h
+	dec sp
+	ld hl,$28
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+		#if address&$FF == $F0
+		#ifndef opcodeF0
+			fill_to(address)
+#define opcodeF0 eval($)
+	;ld a,($FF00+N)
+	pop hl
+	ld b,h
+	ld h,$FF
+	ld a,(hl)
+	NEXT_B
+		#else
+			#ifndef opcodeF0_B
+				fill_to(address)
+#define opcodeF0_B eval($)
+	;ld a,($FF00+N)
+	ld l,b
+	ld h,$FF
+	ld a,(hl)
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F1
+		#ifndef opcodeF1
+			fill_to(address)
+#define opcodeF1 eval($)
+	;pop af
+	ld hl,0
+	add hl,sp
+	ld sp,iy
+	inc iy
+	inc iy
+	pop af
+	ld sp,hl
+	NEXT
+		#else
+			#ifndef opcodeF1_B
+				fill_to(address)
+#define opcodeF1_B eval($)
+	;pop af
+	ld hl,0
+	add hl,sp
+	ld sp,iy
+	inc iy
+	inc iy
+	pop af
+	ld sp,hl
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F2
+		#ifndef opcodeF2
+			fill_to(address)
+#define opcodeF2 eval($)
+	;ld a,($FF00+C)
+	ex af,af'
+	exx
+	ld a,c
+	exx
+	ld l,a
+	ld h,$FF
+	ex af,af'
+	ld a,(hl)
+	NEXT
+		#else
+			#ifndef opcodeF2_B
+				fill_to(address)
+#define opcodeF2_B eval($)
+	;ld a,($FF00+C)
+	ex af,af'
+	exx
+	ld a,c
+	exx
+	ld l,a
+	ld h,$FF
+	ex af,af'
+	ld a,(hl)
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F3
+		#ifndef opcodeF3
+			fill_to(address)
+#define opcodeF3 eval($)
+	;empty
+		#else
+			#ifndef opcodeF3_B
+				fill_to(address)
+#define opcodeF3_B eval($)
+	;di
+	ex af,af'
+	xor a
+	ld (intstatus),a
+	ex af,af'
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F4
+		#ifndef opcodeF4
+			fill_to(address)
+#define opcodeF4 eval($)
+	;empty
+		#else
+			#ifndef opcodeF4_B
+				fill_to(address)
+#define opcodeF4_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F5
+		#ifndef opcodeF5
+			fill_to(address)
+#define opcodeF5 eval($)
+	;push af
+	ld (_+1),sp
+	ld sp,iy
+	dec iy
+	dec iy
+	push af
+_
+	ld sp,0
+	NEXT
+		#else
+			#ifndef opcodeF5_B
+				fill_to(address)
+#define opcodeF5_B eval($)
+	;push af
+	ld (_+1),sp
+	ld sp,iy
+	dec iy
+	dec iy
+	push af
+_
+	ld sp,0
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F6
+		#ifndef opcodeF6
+			fill_to(address)
+#define opcodeF6 eval($)
+	;or N
+	pop hl
+	or l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeF6_B
+				fill_to(address)
+#define opcodeF6_B eval($)
+	;or N
+	or b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F7
+		#ifndef opcodeF7
+			fill_to(address)
+#define opcodeF7 eval($)
+	;rst 30h
+	ld hl,$30
+	jp do_call
+		#else
+			#ifndef opcodeF7_B
+				fill_to(address)
+#define opcodeF7_B eval($)
+	;rst 30h
+	dec sp
+	ld hl,$30
+	jp do_call
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F8
+		#ifndef opcodeF8
+			fill_to(address)
+#define opcodeF8 eval($)
+	;ld hl,sp+N
+	ex af,af'
+	ld hl,1
+	add hl,sp
+	exx
+	pop hl
+	ld a,l
+	rla
+	sbc a,a
+	ld h,a
+	ld sp,iy
+	add hl,sp
+	exx
+	ld sp,hl
+	ex af,af'
+	NEXT
+		#else
+			#ifndef opcodeF8_B
+				fill_to(address)
+#define opcodeF8_B eval($)
+	;ld hl,sp+N
+	ex af,af'
+	ld hl,0
+	add hl,sp
+	ld a,b
+	exx
+	ld l,a
+	rla
+	sbc a,a
+	ld h,a
+	ld sp,iy
+	add hl,sp
+	exx
+	ld sp,hl
+	ex af,af'
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $F9
+		#ifndef opcodeF9
+			fill_to(address)
+#define opcodeF9 eval($)
+	;ld sp,hl
+	exx
+	ex de,hl
+	ld iyh,d
+	ld iyl,e
+	ex de,hl
+	exx
+	NEXT
+		#else
+			#ifndef opcodeF9_B
+				fill_to(address)
+#define opcodeF9_B eval($)
+	;ld sp,hl
+	exx
+	ex de,hl
+	ld iyh,d
+	ld iyl,e
+	ex de,hl
+	exx
+	NEXT_B
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $FA
+		#ifndef opcodeFA
+			fill_to(address)
+#define opcodeFA eval($)
+	;ld a,(NN)
+	pop hl
+	ld a,(hl)
+	NEXT
+		#else
+			#ifndef opcodeFA_B
+				fill_to(address)
+#define opcodeFA_B eval($)
+	;ld a,(NN)
+	dec sp
+	pop hl
+	ld a,(hl)
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $FB
+		#ifndef opcodeFB
+			fill_to(address)
+#define opcodeFB eval($)
+	;ei
+	ex af,af'
+	ld a,1
+	ld (intstatus),a
+check_ints_2:
+	ld hl,0
+	add hl,sp
+	ld sp,mystack
+	push hl
+	jp check_ints
+		#else
+			#ifndef opcodeFB_B
+				fill_to(address)
+#define opcodeFB_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $FC
+		#ifndef opcodeFC
+			fill_to(address)
+#define opcodeFC eval($)
+	;empty
+		#else
+			#ifndef opcodeFC_B
+				fill_to(address)
+#define opcodeFC_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $FD
+		#ifndef opcodeFD
+			fill_to(address)
+#define opcodeFD eval($)
+	;empty
+		#else
+			#ifndef opcodeFD_B
+				fill_to(address)
+#define opcodeFD_B eval($)
+	;empty
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $FE
+		#ifndef opcodeFE
+			fill_to(address)
+#define opcodeFE eval($)
+	;cp N
+	pop hl
+	cp l
+	;NEXT_H
+	ld l,h      ;4cc
+	ld h,e      ;8cc
+	ld h,(hl)   ;15cc
+	jp (hl)     ;19cc
+		#else
+			#ifndef opcodeFE_B
+				fill_to(address)
+#define opcodeFE_B eval($)
+	;cp N
+	cp b
+	NEXT
+			#else
+				#define address eval(address+1)
+			#endif
+		#endif
+	#endif
+	
+	#if address&$FF == $FF
+		#ifndef opcodeFF
+			fill_to(address)
+#define opcodeFF eval($)
+	;rst 38h
+	ld hl,$38
+	jp do_call
+		#else
+			#ifndef opcodeFF_B
+				fill_to(address)
+#define opcodeFF_B eval($)
+	;rst 38h
+	dec sp
+	ld hl,$38
+	jp do_call
+			#else
+				#if address-$ < 256
+					insert_op(address+1)
+				#endif
+			#endif
+		#endif
+	#endif
+#endmacro
+
+#macro fill_to(address)
+	#if address == ($+1)
+		.db $FD
+	#else
+		#if address == ($+2)
+			.db $FD,$FD
+		#else
+			#if address > ($+2)
+				rst 18h
+				.db address-$-1
+				#define bytes_skipped eval(bytes_skipped+address-$)
+				.org address
+			#else
+				#if address < $
+					.echo "ERROR: NEGATIVE FILL AT ",$," TO ",address
+				#endif
+			#endif
+		#endif
+	#endif
+	;.block address - $
+#endmacro
+
+#macro insert_opcodes(howmany)
+	#if howmany > 0
+		insert_op($)
+		insert_opcodes(howmany-1)
+	#endif
+#endmacro
+
+page3code:
+	.org $E000
+opcodetable:
+	.db opcode00 >> 8
+	.db opcode01 >> 8
+	.db opcode02 >> 8
+	.db opcode03 >> 8
+	.db opcode04 >> 8
+	.db opcode05 >> 8
+	.db opcode06 >> 8
+	.db opcode07 >> 8
+	.db opcode08 >> 8
+	.db opcode09 >> 8
+	.db opcode0A >> 8
+	.db opcode0B >> 8
+	.db opcode0C >> 8
+	.db opcode0D >> 8
+	.db opcode0E >> 8
+	.db opcode0F >> 8
+	.db opcode10 >> 8
+	.db opcode11 >> 8
+	.db opcode12 >> 8
+	.db opcode13 >> 8
+	.db opcode14 >> 8
+	.db opcode15 >> 8
+	.db opcode16 >> 8
+	.db opcode17 >> 8
+	.db opcode18 >> 8
+	.db opcode19 >> 8
+	.db opcode1A >> 8
+	.db opcode1B >> 8
+	.db opcode1C >> 8
+	.db opcode1D >> 8
+	.db opcode1E >> 8
+	.db opcode1F >> 8
+	.db opcode20 >> 8
+	.db opcode21 >> 8
+	.db opcode22 >> 8
+	.db opcode23 >> 8
+	.db opcode24 >> 8
+	.db opcode25 >> 8
+	.db opcode26 >> 8
+	.db opcode27 >> 8
+	.db opcode28 >> 8
+	.db opcode29 >> 8
+	.db opcode2A >> 8
+	.db opcode2B >> 8
+	.db opcode2C >> 8
+	.db opcode2D >> 8
+	.db opcode2E >> 8
+	.db opcode2F >> 8
+	.db opcode30 >> 8
+	.db opcode31 >> 8
+	.db opcode32 >> 8
+	.db opcode33 >> 8
+	.db opcode34 >> 8
+	.db opcode35 >> 8
+	.db opcode36 >> 8
+	.db opcode37 >> 8
+	.db opcode38 >> 8
+	.db opcode39 >> 8
+	.db opcode3A >> 8
+	.db opcode3B >> 8
+	.db opcode3C >> 8
+	.db opcode3D >> 8
+	.db opcode3E >> 8
+	.db opcode3F >> 8
+	.db opcode40 >> 8
+	.db opcode41 >> 8
+	.db opcode42 >> 8
+	.db opcode43 >> 8
+	.db opcode44 >> 8
+	.db opcode45 >> 8
+	.db opcode46 >> 8
+	.db opcode47 >> 8
+	.db opcode48 >> 8
+	.db opcode49 >> 8
+	.db opcode4A >> 8
+	.db opcode4B >> 8
+	.db opcode4C >> 8
+	.db opcode4D >> 8
+	.db opcode4E >> 8
+	.db opcode4F >> 8
+	.db opcode50 >> 8
+	.db opcode51 >> 8
+	.db opcode52 >> 8
+	.db opcode53 >> 8
+	.db opcode54 >> 8
+	.db opcode55 >> 8
+	.db opcode56 >> 8
+	.db opcode57 >> 8
+	.db opcode58 >> 8
+	.db opcode59 >> 8
+	.db opcode5A >> 8
+	.db opcode5B >> 8
+	.db opcode5C >> 8
+	.db opcode5D >> 8
+	.db opcode5E >> 8
+	.db opcode5F >> 8
+	.db opcode60 >> 8
+	.db opcode61 >> 8
+	.db opcode62 >> 8
+	.db opcode63 >> 8
+	.db opcode64 >> 8
+	.db opcode65 >> 8
+	.db opcode66 >> 8
+	.db opcode67 >> 8
+	.db opcode68 >> 8
+	.db opcode69 >> 8
+	.db opcode6A >> 8
+	.db opcode6B >> 8
+	.db opcode6C >> 8
+	.db opcode6D >> 8
+	.db opcode6E >> 8
+	.db opcode6F >> 8
+	.db opcode70 >> 8
+	.db opcode71 >> 8
+	.db opcode72 >> 8
+	.db opcode73 >> 8
+	.db opcode74 >> 8
+	.db opcode75 >> 8
+	.db opcode76 >> 8
+	.db opcode77 >> 8
+	.db opcode78 >> 8
+	.db opcode79 >> 8
+	.db opcode7A >> 8
+	.db opcode7B >> 8
+	.db opcode7C >> 8
+	.db opcode7D >> 8
+	.db opcode7E >> 8
+	.db opcode7F >> 8
+	.db opcode80 >> 8
+	.db opcode81 >> 8
+	.db opcode82 >> 8
+	.db opcode83 >> 8
+	.db opcode84 >> 8
+	.db opcode85 >> 8
+	.db opcode86 >> 8
+	.db opcode87 >> 8
+	.db opcode88 >> 8
+	.db opcode89 >> 8
+	.db opcode8A >> 8
+	.db opcode8B >> 8
+	.db opcode8C >> 8
+	.db opcode8D >> 8
+	.db opcode8E >> 8
+	.db opcode8F >> 8
+	.db opcode90 >> 8
+	.db opcode91 >> 8
+	.db opcode92 >> 8
+	.db opcode93 >> 8
+	.db opcode94 >> 8
+	.db opcode95 >> 8
+	.db opcode96 >> 8
+	.db opcode97 >> 8
+	.db opcode98 >> 8
+	.db opcode99 >> 8
+	.db opcode9A >> 8
+	.db opcode9B >> 8
+	.db opcode9C >> 8
+	.db opcode9D >> 8
+	.db opcode9E >> 8
+	.db opcode9F >> 8
+	.db opcodeA0 >> 8
+	.db opcodeA1 >> 8
+	.db opcodeA2 >> 8
+	.db opcodeA3 >> 8
+	.db opcodeA4 >> 8
+	.db opcodeA5 >> 8
+	.db opcodeA6 >> 8
+	.db opcodeA7 >> 8
+	.db opcodeA8 >> 8
+	.db opcodeA9 >> 8
+	.db opcodeAA >> 8
+	.db opcodeAB >> 8
+	.db opcodeAC >> 8
+	.db opcodeAD >> 8
+	.db opcodeAE >> 8
+	.db opcodeAF >> 8
+	.db opcodeB0 >> 8
+	.db opcodeB1 >> 8
+	.db opcodeB2 >> 8
+	.db opcodeB3 >> 8
+	.db opcodeB4 >> 8
+	.db opcodeB5 >> 8
+	.db opcodeB6 >> 8
+	.db opcodeB7 >> 8
+	.db opcodeB8 >> 8
+	.db opcodeB9 >> 8
+	.db opcodeBA >> 8
+	.db opcodeBB >> 8
+	.db opcodeBC >> 8
+	.db opcodeBD >> 8
+	.db opcodeBE >> 8
+	.db opcodeBF >> 8
+	.db opcodeC0 >> 8
+	.db opcodeC1 >> 8
+	.db opcodeC2 >> 8
+	.db opcodeC3 >> 8
+	.db opcodeC4 >> 8
+	.db opcodeC5 >> 8
+	.db opcodeC6 >> 8
+	.db opcodeC7 >> 8
+	.db opcodeC8 >> 8
+	.db opcodeC9 >> 8
+	.db opcodeCA >> 8
+	.db opcodeCB >> 8
+	.db opcodeCC >> 8
+	.db opcodeCD >> 8
+	.db opcodeCE >> 8
+	.db opcodeCF >> 8
+	.db opcodeD0 >> 8
+	.db opcodeD1 >> 8
+	.db opcodeD2 >> 8
+	.db opcodeD3 >> 8
+	.db opcodeD4 >> 8
+	.db opcodeD5 >> 8
+	.db opcodeD6 >> 8
+	.db opcodeD7 >> 8
+	.db opcodeD8 >> 8
+	.db opcodeD9 >> 8
+	.db opcodeDA >> 8
+	.db opcodeDB >> 8
+	.db opcodeDC >> 8
+	.db opcodeDD >> 8
+	.db opcodeDE >> 8
+	.db opcodeDF >> 8
+	.db opcodeE0 >> 8
+	.db opcodeE1 >> 8
+	.db opcodeE2 >> 8
+	.db opcodeE3 >> 8
+	.db opcodeE4 >> 8
+	.db opcodeE5 >> 8
+	.db opcodeE6 >> 8
+	.db opcodeE7 >> 8
+	.db opcodeE8 >> 8
+	.db opcodeE9 >> 8
+	.db opcodeEA >> 8
+	.db opcodeEB >> 8
+	.db opcodeEC >> 8
+	.db opcodeED >> 8
+	.db opcodeEE >> 8
+	.db opcodeEF >> 8
+	.db opcodeF0 >> 8
+	.db opcodeF1 >> 8
+	.db opcodeF2 >> 8
+	.db opcodeF3 >> 8
+	.db opcodeF4 >> 8
+	.db opcodeF5 >> 8
+	.db opcodeF6 >> 8
+	.db opcodeF7 >> 8
+	.db opcodeF8 >> 8
+	.db opcodeF9 >> 8
+	.db opcodeFA >> 8
+	.db opcodeFB >> 8
+	.db opcodeFC >> 8
+	.db opcodeFD >> 8
+	.db opcodeFE >> 8
+	.db opcodeFF >> 8
+	
+opcodetable_B:
+	.db opcode00_B >> 8
+	.db opcode01_B >> 8
+	.db opcode02_B >> 8
+	.db opcode03_B >> 8
+	.db opcode04_B >> 8
+	.db opcode05_B >> 8
+	.db opcode06_B >> 8
+	.db opcode07_B >> 8
+	.db opcode08_B >> 8
+	.db opcode09_B >> 8
+	.db opcode0A_B >> 8
+	.db opcode0B_B >> 8
+	.db opcode0C_B >> 8
+	.db opcode0D_B >> 8
+	.db opcode0E_B >> 8
+	.db opcode0F_B >> 8
+	.db opcode10_B >> 8
+	.db opcode11_B >> 8
+	.db opcode12_B >> 8
+	.db opcode13_B >> 8
+	.db opcode14_B >> 8
+	.db opcode15_B >> 8
+	.db opcode16_B >> 8
+	.db opcode17_B >> 8
+	.db opcode18_B >> 8
+	.db opcode19_B >> 8
+	.db opcode1A_B >> 8
+	.db opcode1B_B >> 8
+	.db opcode1C_B >> 8
+	.db opcode1D_B >> 8
+	.db opcode1E_B >> 8
+	.db opcode1F_B >> 8
+	.db opcode20_B >> 8
+	.db opcode21_B >> 8
+	.db opcode22_B >> 8
+	.db opcode23_B >> 8
+	.db opcode24_B >> 8
+	.db opcode25_B >> 8
+	.db opcode26_B >> 8
+	.db opcode27_B >> 8
+	.db opcode28_B >> 8
+	.db opcode29_B >> 8
+	.db opcode2A_B >> 8
+	.db opcode2B_B >> 8
+	.db opcode2C_B >> 8
+	.db opcode2D_B >> 8
+	.db opcode2E_B >> 8
+	.db opcode2F_B >> 8
+	.db opcode30_B >> 8
+	.db opcode31_B >> 8
+	.db opcode32_B >> 8
+	.db opcode33_B >> 8
+	.db opcode34_B >> 8
+	.db opcode35_B >> 8
+	.db opcode36_B >> 8
+	.db opcode37_B >> 8
+	.db opcode38_B >> 8
+	.db opcode39_B >> 8
+	.db opcode3A_B >> 8
+	.db opcode3B_B >> 8
+	.db opcode3C_B >> 8
+	.db opcode3D_B >> 8
+	.db opcode3E_B >> 8
+	.db opcode3F_B >> 8
+	.db opcode40_B >> 8
+	.db opcode41_B >> 8
+	.db opcode42_B >> 8
+	.db opcode43_B >> 8
+	.db opcode44_B >> 8
+	.db opcode45_B >> 8
+	.db opcode46_B >> 8
+	.db opcode47_B >> 8
+	.db opcode48_B >> 8
+	.db opcode49_B >> 8
+	.db opcode4A_B >> 8
+	.db opcode4B_B >> 8
+	.db opcode4C_B >> 8
+	.db opcode4D_B >> 8
+	.db opcode4E_B >> 8
+	.db opcode4F_B >> 8
+	.db opcode50_B >> 8
+	.db opcode51_B >> 8
+	.db opcode52_B >> 8
+	.db opcode53_B >> 8
+	.db opcode54_B >> 8
+	.db opcode55_B >> 8
+	.db opcode56_B >> 8
+	.db opcode57_B >> 8
+	.db opcode58_B >> 8
+	.db opcode59_B >> 8
+	.db opcode5A_B >> 8
+	.db opcode5B_B >> 8
+	.db opcode5C_B >> 8
+	.db opcode5D_B >> 8
+	.db opcode5E_B >> 8
+	.db opcode5F_B >> 8
+	.db opcode60_B >> 8
+	.db opcode61_B >> 8
+	.db opcode62_B >> 8
+	.db opcode63_B >> 8
+	.db opcode64_B >> 8
+	.db opcode65_B >> 8
+	.db opcode66_B >> 8
+	.db opcode67_B >> 8
+	.db opcode68_B >> 8
+	.db opcode69_B >> 8
+	.db opcode6A_B >> 8
+	.db opcode6B_B >> 8
+	.db opcode6C_B >> 8
+	.db opcode6D_B >> 8
+	.db opcode6E_B >> 8
+	.db opcode6F_B >> 8
+	.db opcode70_B >> 8
+	.db opcode71_B >> 8
+	.db opcode72_B >> 8
+	.db opcode73_B >> 8
+	.db opcode74_B >> 8
+	.db opcode75_B >> 8
+	.db opcode76_B >> 8
+	.db opcode77_B >> 8
+	.db opcode78_B >> 8
+	.db opcode79_B >> 8
+	.db opcode7A_B >> 8
+	.db opcode7B_B >> 8
+	.db opcode7C_B >> 8
+	.db opcode7D_B >> 8
+	.db opcode7E_B >> 8
+	.db opcode7F_B >> 8
+	.db opcode80_B >> 8
+	.db opcode81_B >> 8
+	.db opcode82_B >> 8
+	.db opcode83_B >> 8
+	.db opcode84_B >> 8
+	.db opcode85_B >> 8
+	.db opcode86_B >> 8
+	.db opcode87_B >> 8
+	.db opcode88_B >> 8
+	.db opcode89_B >> 8
+	.db opcode8A_B >> 8
+	.db opcode8B_B >> 8
+	.db opcode8C_B >> 8
+	.db opcode8D_B >> 8
+	.db opcode8E_B >> 8
+	.db opcode8F_B >> 8
+	.db opcode90_B >> 8
+	.db opcode91_B >> 8
+	.db opcode92_B >> 8
+	.db opcode93_B >> 8
+	.db opcode94_B >> 8
+	.db opcode95_B >> 8
+	.db opcode96_B >> 8
+	.db opcode97_B >> 8
+	.db opcode98_B >> 8
+	.db opcode99_B >> 8
+	.db opcode9A_B >> 8
+	.db opcode9B_B >> 8
+	.db opcode9C_B >> 8
+	.db opcode9D_B >> 8
+	.db opcode9E_B >> 8
+	.db opcode9F_B >> 8
+	.db opcodeA0_B >> 8
+	.db opcodeA1_B >> 8
+	.db opcodeA2_B >> 8
+	.db opcodeA3_B >> 8
+	.db opcodeA4_B >> 8
+	.db opcodeA5_B >> 8
+	.db opcodeA6_B >> 8
+	.db opcodeA7_B >> 8
+	.db opcodeA8_B >> 8
+	.db opcodeA9_B >> 8
+	.db opcodeAA_B >> 8
+	.db opcodeAB_B >> 8
+	.db opcodeAC_B >> 8
+	.db opcodeAD_B >> 8
+	.db opcodeAE_B >> 8
+	.db opcodeAF_B >> 8
+	.db opcodeB0_B >> 8
+	.db opcodeB1_B >> 8
+	.db opcodeB2_B >> 8
+	.db opcodeB3_B >> 8
+	.db opcodeB4_B >> 8
+	.db opcodeB5_B >> 8
+	.db opcodeB6_B >> 8
+	.db opcodeB7_B >> 8
+	.db opcodeB8_B >> 8
+	.db opcodeB9_B >> 8
+	.db opcodeBA_B >> 8
+	.db opcodeBB_B >> 8
+	.db opcodeBC_B >> 8
+	.db opcodeBD_B >> 8
+	.db opcodeBE_B >> 8
+	.db opcodeBF_B >> 8
+	.db opcodeC0_B >> 8
+	.db opcodeC1_B >> 8
+	.db opcodeC2_B >> 8
+	.db opcodeC3_B >> 8
+	.db opcodeC4_B >> 8
+	.db opcodeC5_B >> 8
+	.db opcodeC6_B >> 8
+	.db opcodeC7_B >> 8
+	.db opcodeC8_B >> 8
+	.db opcodeC9_B >> 8
+	.db opcodeCA_B >> 8
+	.db opcodeCB_B >> 8
+	.db opcodeCC_B >> 8
+	.db opcodeCD_B >> 8
+	.db opcodeCE_B >> 8
+	.db opcodeCF_B >> 8
+	.db opcodeD0_B >> 8
+	.db opcodeD1_B >> 8
+	.db opcodeD2_B >> 8
+	.db opcodeD3_B >> 8
+	.db opcodeD4_B >> 8
+	.db opcodeD5_B >> 8
+	.db opcodeD6_B >> 8
+	.db opcodeD7_B >> 8
+	.db opcodeD8_B >> 8
+	.db opcodeD9_B >> 8
+	.db opcodeDA_B >> 8
+	.db opcodeDB_B >> 8
+	.db opcodeDC_B >> 8
+	.db opcodeDD_B >> 8
+	.db opcodeDE_B >> 8
+	.db opcodeDF_B >> 8
+	.db opcodeE0_B >> 8
+	.db opcodeE1_B >> 8
+	.db opcodeE2_B >> 8
+	.db opcodeE3_B >> 8
+	.db opcodeE4_B >> 8
+	.db opcodeE5_B >> 8
+	.db opcodeE6_B >> 8
+	.db opcodeE7_B >> 8
+	.db opcodeE8_B >> 8
+	.db opcodeE9_B >> 8
+	.db opcodeEA_B >> 8
+	.db opcodeEB_B >> 8
+	.db opcodeEC_B >> 8
+	.db opcodeED_B >> 8
+	.db opcodeEE_B >> 8
+	.db opcodeEF_B >> 8
+	.db opcodeF0_B >> 8
+	.db opcodeF1_B >> 8
+	.db opcodeF2_B >> 8
+	.db opcodeF3_B >> 8
+	.db opcodeF4_B >> 8
+	.db opcodeF5_B >> 8
+	.db opcodeF6_B >> 8
+	.db opcodeF7_B >> 8
+	.db opcodeF8_B >> 8
+	.db opcodeF9_B >> 8
+	.db opcodeFA_B >> 8
+	.db opcodeFB_B >> 8
+	.db opcodeFC_B >> 8
+	.db opcodeFD_B >> 8
+	.db opcodeFE_B >> 8
+	.db opcodeFF_B >> 8
+	
+bitop_table:
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_swap_b & $FF
+	.db bitop_swap_c & $FF
+	.db bitop_swap_d & $FF
+	.db bitop_swap_e & $FF
+	.db bitop_swap_h & $FF
+	.db bitop_swap_l & $FF
+	.db bitop_swap_hl & $FF
+	.db bitop_swap_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_xf & $FF
+	.db bitop_a & $FF
+	
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_x & $FF
+	.db bitop_a & $FF
+	
+;////////////////////////
+;///// BIT SHIFTING /////
+;////////////////////////
+bitop_a:
+	ld (_+1),a
+	ex af,af'
+_
+	rlc a
+	NEXT
+	
+bitop_x:
+bitop_xf:
+	ld (_+1),a
+	ex af,af'
+	exx
+_
+	rlc b
+	exx
+	NEXT
+	
+bitop_swap_b:
+	exx
+	ld a,b
+	rrca \ rrca \ rrca \ rrca
+	ld b,a
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_c:
+	exx
+	ld a,c
+	rrca \ rrca \ rrca \ rrca
+	ld c,a
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_d:
+	exx
+	ld a,d
+	rrca \ rrca \ rrca \ rrca
+	ld d,a
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_e:
+	exx
+	ld a,e
+	rrca \ rrca \ rrca \ rrca
+	ld e,a
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_h:
+	exx
+	ld a,h
+	rrca \ rrca \ rrca \ rrca
+	ld h,a
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_l:
+	exx
+	ld a,l
+	rrca \ rrca \ rrca \ rrca
+	ld l,a
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_hl:
+	exx
+	ld a,(hl)
+	rrd
+	exx
+	ex af,af'
+	NEXT
+	
+bitop_swap_a:
+	ex af,af'
+	rrca \ rrca \ rrca \ rrca
+	NEXT
+	
+	fill_to($E3CB)
+bitcodes:
+	ex af,af'
+	dec sp
+	pop af
+bitcodes_B:
+	ld l,a
+	dec h
+	ld l,(hl)
+	inc h
+	jp (hl)
+	
+	fill_to($E3FB)
+#define opcodeFB_B eval($)
+	;ei
+	dec sp
+	jp opcodeFB
+	
+opcodes_start:
+	insert_opcodes(512-27)
+	
+	.echo "Opcode emulation size is ", $-opcodes_start
+	
+;Input: HL = address, A = LSB of address plus 1, Z = (LSB==$FF)
+	FIX_LBL
+io_write:
+	ex af,af'
+	ld (hl),a
+	ex af,af'
+	jp z,check_ints_2
+	dec a
+	jp z,getkey
+	cp $0f
+	jp z,check_ints_2
+	cp $41
+	jr nz,_
+	res 0,(hl)
+	res 1,(hl)
+	ld a,(LY)
+	cp 144
+	jr c,end_io_write
+	set 0,(hl)
+	jr end_io_write
+_
+	cp $46
+	jr nz,end_io_write
+	ld de,$fe00
+	ld h,(hl)
+	ld l,e
+	ld a,c
+	ld bc,$00a0
+	ldir
+	ld c,a
+	ld de,(opcodetable_B & $FF00) + (opcodetable >> 8)
+end_io_write:
+	ex af,af'
+	NEXT
+	
+	FIX_LBL
+timer1:
+	ld a,2
+	out ($31),a
+	ld d,0
+	in a,($32)
+	ld e,a
+	inc de
+	inc de
+	inc de
+	ld hl,(chan3cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 2,(hl)
+	jr z,_
+	ld a,(NR32)
+	and %01100000
+	jr z,_
+	ld l,soundOutputs+1 & $FF
+	ld a,(hl)
+	xor 2
+	ld (hl),a
+_
+	ld hl,(chan3div)
+	bit 1,a
+	jr z,$+3
+	inc hl
+	res 0,l
+_
+	ld (chan3cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	ld b,a
+	
+	ld hl,(chan4cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 3,(hl)
+	jr z,_
+	ld l,soundOutputs & $FF
+	ld a,r
+	xor (hl)
+	and 1
+	xor (hl)
+	ld (hl),a
+_
+	ld hl,(chan4div)
+_
+	ld (chan4cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	cp b
+	jr c,_
+	ld a,b
+_
+	out ($32),a
+	
+	ld hl,(soundOutputs)
+	ld a,h
+	xor l
+	ld (soundDiff1),a
+	ld (soundDiff2),a
+	bit 7,c
+	ld c,l
+	jr z,$+3
+	ld c,h
+	
+	ld de,(opcodetable_B & $FF00) + (opcodetable >> 8)
+	ex af,af'
+	NEXT
+	
+	FIX_LBL
+timer2:
+	ld a,2
+	out ($34),a
+	ld d,0
+	in a,($35)
+	ld e,a
+	inc de
+	inc de
+	inc de
+	ld hl,(chan1cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 0,(hl)
+	jr z,_
+	ld l,soundOutputs & $FF
+	ld a,(hl)
+	xor 2
+	ld (hl),a
+	bit 1,a
+	ld hl,(chan1div1)
+	jr nz,++_
+_
+	ld hl,(chan1div0)
+_
+	ld (chan1cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	ld b,a
+	
+	ld hl,(chan2cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 1,(hl)
+	jr z,_
+	ld l,soundOutputs+1 & $FF
+	ld a,(hl)
+	xor 1
+	ld (hl),a
+	rra
+	ld hl,(chan2div1)
+	jr c,++_
+_
+	ld hl,(chan2div0)
+_
+	ld (chan2cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	cp b
+	jr c,_
+	ld a,b
+_
+	out ($35),a
+	
+	ld hl,(soundOutputs)
+	ld a,h
+	xor l
+	ld (soundDiff1),a
+	ld (soundDiff2),a
+	bit 7,c
+	ld c,l
+	jr z,$+3
+	ld c,h
+	
+	ld de,(opcodetable_B & $FF00) + (opcodetable >> 8)
+	ex af,af'
+	NEXT
+	
+	FIX_LBL
+irq_sound:
+	ex (sp),hl
+	ex af,af'
+	in a,(4)
+	rla
+	jr nc,_
+	sbc a,a
+	out ($37),a
+	ld a,c
+soundDiff1 = $+1
+	xor 0
+	ld c,a
+	out (0),a
+	dec ixl
+	jr z,hardware
+	ex af,af'
+	NEXT
+	
+_
+	rla
+	jp c,timer2
+	rla
+	jp c,timer1
+	and %00100000
+	jp z,die
+	
+	ld (_+1),sp
+	ld sp,mystack
+	ld a,3
+	out (6),a
+	call handleSound
+	ld a,(pageA)
+	out (6),a
+_
+	ld sp,0
+	ex af,af'
+	jp opcode00
+	
+	FIX_LBL
+irq:
+	ex (sp),hl
+	ex af,af'
+	in a,(4)
+	rla
+	jp nc,die
+	
+	FIX_LBL
+hardware:
+	ld a,(STAT)
+	rrca
+	rrca
+	add a,a
+	rlca
+	jp pe,_
+	xor 3
+	ld (STAT),a
+	ld a,(channelSelect)
+	or a
+	ld a,2
+	ld ixl,a
+	jr nz,midscanline_continue
+	out ($37),a
+	out ($38),a
+	jr midscanline_continue
+	FIX_LBL
+_
+	ld (STAT),a
+	ld hl,0
+	add hl,sp
+	ld sp,mystack
+	push hl
+	ld a,3
+	out (6),a
+	call hardwareflash
+	ld a,(pageA)
+	out (6),a
+	
+	FIX_LBL
+check_ints:
+	ld a,(intstatus)
+	or a
+	ld a,(IE)
+	ld hl,IF
+	jr z,no_interrupts
+	and (hl)
+	jr z,no_interrupts_3
+	rra
+	jr nc,_
+	res 0,(hl)
+	ld l,$40
+	jr do_interrupt
+_
+	rra
+	jr nc,_
+	res 1,(hl)
+	ld l,$48
+	jr do_interrupt
+_
+	rra
+	jr nc,_
+	res 2,(hl)
+	ld l,$50
+	jr do_interrupt
+_
+	rra
+	jr nc,no_interrupts
+	res 3,(hl)
+	ld l,$58
+do_interrupt:
+	xor a
+	ld h,a
+	ld (intstatus),a
+	ex (sp),hl
+	ld a,(hl)
+	cp $76	;halt
+	jr nz,_
+	inc hl
+_
+	dec iy
+	ld (iy),h
+	dec iy
+	ld (iy),l
+	pop hl
+	ld sp,hl
+	ex af,af'
+	NEXT
+no_interrupts:
+	and (hl)
+no_interrupts_3:
+	pop hl
+	jr z,no_interrupts_2
+	ld a,(hl)
+	cp $76
+	jr nz,no_interrupts_2
+	inc hl
+no_interrupts_2:
+	ld sp,hl
+midscanline_continue:
+	ex af,af'
+	NEXT
+	
+	FIX_LBL
+getkey:
+	;Writing to $ff00, so gimmeh the keys
+	ld a,(hl)
+	ld hl,(keys)
+	or %00001111
+	bit 4,a
+	jr nz,$+3
+	and l
+	bit 5,a
+	jr nz,$+3
+	and h
+	ld (P1),a
+	ex af,af'
+	jp opcode00
+	
+	FIX_LBL
+memcontrol:
+	ld a,(mbc)
+	dec a
+	jp z,dombc2
+	dec a
+	jp z,dombc3
+	dec a
+	jp z,dombc5
+	ld a,h
+	and %01100000
+	cp $60
+	jr nz,_
+	ld a,l
+	ld hl,mbcstatus
+	res 0,(hl)
+	rra
+	jr nc,$+4
+	set 0,(hl)
+	ex af,af'
+	jp opcode00
+_
+	cp $20
+	jr nz,_
+	in a,(6)
+	ld h,a
+	ld a,(basepage)
+	sub h
+	and %11100000
+	ld h,a
+	ld a,l
+	and %00011111
+	jr nz,$+3
+	inc a
+	or h
+	jr setcartrom
+_
+	cp $40
+	jr nz,++_
+	ld a,(mbcstatus)
+	rra
+	jr c,setcartram
+	in a,(6)
+	ld h,a
+	ld a,(basepage)
+	sub h
+	ld h,a
+	ld a,l
+	rrca
+	rrca
+	rrca
+	xor h
+	and %01100000
+	xor h
+	jr nz,setcartrom
+	inc a
+	jr setcartrom
+	
+	FIX_LBL
+dombc5:
+	ld a,h
+	and %01100000
+	cp $20
+	jr nz,_
+	ld a,l
+	and %01111111
+	jr z,setcartrom_abs
+setcartrom:
+	ld h,a
+	ld a,(basepage)
+	sub h
+setcartrom_abs:
+	ld (pageA),a
+	out (6),a
+	ex af,af'
+	jp opcode00
+	
+	FIX_LBL
+dombc3:
+	ld a,h
+	and %01100000
+	cp $20
+	jr nz,_
+	ld a,l
+	and %01111111
+	jr nz,setcartrom
+	inc a
+	jr setcartrom
+_
+	cp $40
+	jr nz,_
+setcartram:
+	ld a,l
+	and 3
+	ld hl,maxRamPageUsed
+	cp (hl)
+	jr c,$+3
+	ld (hl),a
+	add a,$81
+	ld (pageB),a
+	out (7),a
+	; See if accessing unavailable page
+	inc l
+	cp (hl)
+	jp nc,die
+_
+	ex af,af'
+	jp opcode00
+	
+	FIX_LBL
+dombc2:
+	ld a,h
+	and %01100001
+	cp %00100001
+	jr nz,-_
+	ld a,l
+	and %00001111
+	jr nz,setcartrom
+	inc a
+	jr setcartrom
+	
+decompressRAM:
+	ld a,(basepage)
+	out (6),a
+	call decompress_page3code
+	ld a,3
+	out (6),a
+	ret
+	
+	FIX_LBL
+invalid_chk:
+	ex af,af'
+	ld hl,-$0053
+	add hl,sp
+	ld a,h
+	or a
+	jr nz,diewait
+	ld a,l
+	cp 2
+	jr nc,diewait
+	ld sp,TimerInterruptReplacement + 1
+	add hl,sp
+	ld sp,hl
+	ex af,af'
+	jp opcode00
+	
+diewait:
+	in a,(4)
+	bit 3,a
+	jr nz,diewait
+	jp die
+	
+	.echo "CPU emulator: ", $-$E000, " used"
+	.echo "CPU emulator: ", $FC00-$, " left"
+	
+	fill_to($FC00)
+im2lut:
+invalid:
+	fill_to($FC00+257)
+	jp invalid_chk
+	
+	FIX_LBL
+die:
+	ld a,(basepage)
+	out (6),a
+	jp Recover
+	
+	FIX_LBL
+irqflash:
+	push af
+	in a,(4)
+	rla
+	jr nc,_
+	sbc a,a
+	out ($37),a
+	ex af,af'
+soundDiff2 = $+1
+	xor 0
+	out (0),a
+	ex af,af'
+	pop af
+	ei
+	ret	
+_
+	rla
+	jp c,timer2flash
+	rla
+	jp c,timer1flash
+	bit 5,a
+	jp z,die
+	push hl
+	call handleSound
+	pop hl
+	pop af
+	ei
+	ret
+	
+.block $%2
+chan1div0:
+	.dw 0
+chan1div1:
+	.dw 0
+chan1cnt:
+	.dw 0
+chan2div0:
+	.dw 0
+chan2div1:
+	.dw 0
+chan2cnt:
+	.dw 0
+chan3div:
+	.dw 0
+chan3cnt:
+	.dw 0
+chan4div:
+	.dw 0
+chan4cnt:
+	.dw 0
+	
+bytes_skipped_1 = bytes_skipped
+vars:
+trackoffsetY:
+	.db 0
+trackoffsetX:
+	.db 0
+sprite_to_track:
+	.db -4
+sprite_track_count:
+	.db 1
+basepage:
+	.db 0
+sprite_detect:
+	.db 0
+intstatus:
+	.db 1
+lcdchanged:
+	.db 0
+lcdchecksum:
+	.db 0
+mbcstatus:
+	.db 0
+mbc:
+	.db 1
+framecount:
+	.db 1
+frameskip:
+	.db 5
+offsetYFake:
+	.db 8
+offsetXFake:
+	.db 0
+offsetY:
+	.db 8
+offsetX:
+	.db 0
+myLY:
+	.db 8
+mySCY:
+	.db 0
+mySCX:
+	.db 0
+screenHeight:
+	.db 128
+screenWidth:
+	.db 21
+windowLine:
+	.db 0
+screenCopy:
+	jp safecopy_mono_3
+intermediateFrame:
+	jp safecopy_mono_3_intermediate
+dithercount:
+	.db 1
+displayFlags:
+	.db %11000000
+displayFlagsFake:
+	.db %11000000
+decimalSave:
+	.db 0
+keySave:
+	.db 0
+mycontrast:
+	.db 0
+channelSelect:
+	.db 0
+pageA:
+	.db 0
+pageB:
+	.db $81
+keys:
+	.dw 0
+maxRamPageUsed:
+	.db 0
+firstInvalidRamPage:
+	.db 0
+LCDC_backup:
+	.db 0
+STAT_backup:
+	.db 0
+SCY_backup:
+	.db 0
+SCX_backup:
+	.db 0
+LY_backup:
+	.db 0
+LYC_backup:
+	.db 0
+DMA_backup:
+	.db 0
+BGP_backup:
+	.db 0
+OBP0_backup:
+	.db 0
+OBP1_backup:
+	.db 0
+WY_backup:
+	.db 0
+WX_backup:
+	.db 0
+	
+TimerInterruptReplacement:
+	;.block 16
+	
+	fill_to($FDF3)
+#define opcodeF3end eval($)
+	;di
+	ex af,af'
+	xor a
+	ld (intstatus),a
+	ex af,af'
+	jp opcode00
+	
+	fill_to($FDFD)
+irq_jump:
+	jp irq
+	
+page3codesize = $FE00-$E000-bytes_skipped
+	.org page3code + page3codesize
+	

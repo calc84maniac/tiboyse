@@ -1,0 +1,1554 @@
+	#include ti83small.inc
+	#include app.inc
+	
+mystack = $FF00
+
+; No longer Ram Page 0 equates
+; DrawBuffer is (A000-)A200-BC15 at the most
+
+; ROM Page 3 equates
+bit5LUT0 = $5A00 ;5A00-5AFF
+bit5LUT1 = $5B00 ;5B00-5BFF
+bit6LUT0 = $5C00 ;5C00-5CFF
+bit6LUT1 = $5D00 ;5D00-5DFF
+bit4LUT0 = $5E00 ;5E00-5EFF
+bit4LUT1 = $5F00 ;5F00-5FFF
+rotflipLUT = $6000 ;6000-67FF
+fliprotLUT = $6800 ;6800-6FFF
+rotLUT = $7000 ;7000-77FF
+tileLUT = $7900 ;7800-7AFF
+	
+;GB IO equates
+P1 = $ff00
+SB = $ff01
+SC = $ff02
+DIV = $ff04
+TIMA = $ff05
+TMA = $ff06
+TAC = $ff07
+IF = $ff0f
+
+NR10 = $ff10
+NR11 = $ff11
+NR12 = $ff12
+NR13 = $ff13
+NR14 = $ff14
+
+NR21 = $ff16
+NR22 = $ff17
+NR23 = $ff18
+NR24 = $ff19
+
+NR30 = $ff1a
+NR31 = $ff1b
+NR32 = $ff1c
+NR33 = $ff1d
+NR34 = $ff1e
+
+NR41 = $ff20
+NR42 = $ff21
+NR43 = $ff22
+NR44 = $ff23
+
+NR50 = $ff24
+NR51 = $ff25
+NR52 = $ff26
+
+WavePatternRAM = $ff30
+
+LCDC = $ff40
+STAT = $ff41
+SCY = $ff42
+SCX = $ff43
+LY = $ff44
+LYC = $ff45
+DMA = $ff46
+BGP = $ff47
+OBP0 = $ff48
+OBP1 = $ff49
+WY = $ff4a
+WX = $ff4b
+IE = $ffff
+	
+CartridgeName = $0134
+	
+;FlashUnlock = $7FF7
+;#define fast_write
+	
+	defpage(0, "")
+	
+	bcall(_ClrScrnFull)
+	bcall(_HomeUp)
+	
+	in a,(2)
+	rla
+	jp c,not_83_plus
+	
+	call AppPutS
+	.db "TI-Boy SE does  "
+	.db "not run on the  "
+	.db "original TI-83+."
+	.db 0
+	bcall(_GetKey)
+	bcall(_JForceCmdNoChar)
+	
+InstallationFailed:
+	ld sp,(onSP)
+	ei
+	push hl
+	call AppPutS
+	.db "TI-Boy could not"
+	.db "successfully    "
+	.db "modify Flash.   "
+	.db "Error: ",0
+	pop hl
+	bcall(_DispHL)
+	bcall(_GetKey)
+	bcall(_JForceCmdNoChar)
+	
+UnsupportedCartridge:
+	ld sp,(onSP)
+	ei
+	call AppPutS
+	.db "Cartridge type  "
+	.db "is unsupported. "
+	.db "Sorry for the   "
+	.db "inconvenience.",0
+	bcall(_GetKey)
+	bcall(_JForceCmdNoChar)
+	
+MemError:
+	ei
+	call AppPutS
+	.db "Not enough RAM  "
+	.db "for save file.  "
+	.db "Please have 8500"
+	.db "or more bytes   "
+	.db "available.",0
+	bcall(_GetKey)
+	bcall(_JForceCmdNoChar)
+
+not_83_plus:
+	di
+	;ld a,3
+	;out ($20),a
+	;ld a,$0c
+	;out ($2c),a
+	
+	ld hl,WriteFlashCode
+	ld de,WriteFlash
+	ld bc,WriteFlashCodeSize
+	ldir
+	
+	call PutSplashScreen
+	
+	ld c,$87
+	call DisplayNintendo
+	
+	;Backup "previous entries" on OS 2.53MP to appbackupscreen
+	ld a,3
+	out (5),a
+	ld hl,previousEntriesMP + $4000
+	ld de,appBackUpScreen
+	ld bc,768
+	ldir
+	xor a
+	out (5),a
+	
+	;Get last app page
+	in a,(6)
+	bcall(_FindAppNumPages)
+	in a,(6)
+	sub c
+	inc a
+	ld (AppFinalPage),a
+	out (7),a
+	;Get cartridge type
+	ld hl,($8147)
+	;Get RAM size byte
+	ld a,($8149)
+	ld h,a
+	ld a,$81
+	out (7),a
+	ld (CartridgeType),hl
+	ld a,h
+	cp 3
+	jp z,loadappvar32K
+	or a
+	jr z,appvardone
+	
+loadappvar8K:
+	;Put appvar name into OP1
+	ld hl,$4012 - 1
+	rst 20h
+	ld a,AppVarObj
+	ld (OP1),a
+	
+	ld hl,OP1+9
+	ld a,' '
+_
+	ld (hl),0
+	dec hl
+	cp (hl)
+	jr z,-_
+	
+	bcall(_ChkFindSym)
+	jr c,appvar8Knotfound
+	
+	ld a,b
+	or a
+	jr z,appvar8Kdone
+	
+	;Check for enough memory
+	ld hl,8500
+	bcall(_EnoughMem)
+	jp c,MemError
+	
+	;Unarchive appvar
+	bcall(_Arc_Unarc)
+	jr loadappvar8K
+	
+appvar8Knotfound:
+	;Check for enough memory
+	ld hl,8500
+	bcall(_EnoughMem)
+	jp c,MemError
+	
+	;Create appvar
+	ld hl,$2000
+	bcall(_CreateAppVar)
+	
+appvar8Kdone:
+	;Put stack pointer in a place that won't corrupt when switching pages
+	ld sp,saveSScreen+768
+	
+	;Skip size bytes
+	inc de
+	inc de
+	ex de,hl
+	call LoadFile
+appvardone:
+	
+	;Put stack pointer in a place that won't corrupt when switching pages
+	ld sp,saveSScreen+768
+	
+	;Get the cartridge type
+	ld a,(CartridgeType)
+	cp $1F
+	jp nc,UnsupportedCartridge
+	ld hl,CartridgeLookup
+	add a,l
+	ld l,a
+	jr nc,$+3
+	inc h
+	ld a,(hl)
+	or a
+	jp m,UnsupportedCartridge
+	ld (CartridgeType),a
+	
+	;Back up RAM permissions
+	in a,($25)
+	ld l,a
+	in a,($26)
+	ld h,a
+	ld (RamPermissions),hl
+	
+	;Unlock Flash
+	call UnlockFlash
+	
+	in a,(2)
+	and 4
+	ld hl,0
+	jp z,InstallationFailed
+	
+	call PatchPageCopy
+	ld hl,-1
+	jp c,InstallationFailed
+	
+	;Save the first byte of page 0, because it will be replaced by swap sector identifier
+	ld a,($0000)
+	ld (Byte0000),a
+	
+	;Find the swap sector
+	bcall(_FindSwapSector)
+	ld (SwapSectorPage),a
+	
+	;Erase the swap sector
+	ld b,a
+	call EraseSector
+	ld hl,1
+	jp c,InstallationFailed
+	
+	ld c,$88
+	call DisplayNintendo
+	
+	;Copy contents of sector 00h to swap sector
+	ld a,(SwapSectorPage)
+	ld c,a
+	ld b,$00
+	ld hl,SwapSectorIdentifier
+	call CopySector
+	ld hl,2
+	jp c,InstallationFailed
+	
+	ld c,$89
+	call DisplayNintendo
+	
+	;Erase sector 00h
+	ld b,$00
+	call EraseSector
+	ld hl,3
+	jp c,InstallationFailed
+	
+	ld c,$8A
+	call DisplayNintendo
+	
+	;Backup first 16KB of RAM to flash page 1
+	ld hl,$4000
+	ld a,$01
+	ld de,$8000
+	ld b,h
+	ld c,l
+	call WriteFlash
+	ld hl,4
+	jp c,InstallationFailed
+	
+	;Backup last 16KB of RAM to flash page 2
+	ld hl,$4000
+	ld a,$02
+	ld de,$C000
+	ld b,h
+	ld c,l
+	call WriteFlash
+	ld hl,5
+	jp c,InstallationFailed
+	
+	ld c,$8B
+	call DisplayNintendo
+	
+	;Copy the gameboy rom page to flash page 0
+	ld a,(AppFinalPage)
+	out (7),a
+	ld hl,$8000
+	ld de,$C000
+	ld bc,$2000
+	ldir
+	ld a,$81
+	out (7),a
+	;Save the timer interrupt routine
+	ld hl,$C050
+	ld de,TimerInterruptBackup
+	ld bc,16
+	ldir
+	;Write the reboot entry point
+	ld hl,RebootEntryCode
+	ld de,$C050
+	ld bc,8
+	ldir
+	;Write the reboot code
+	;ld hl,RebootCode
+	ld de,CartridgeName + $C000
+	ld bc,RebootCodeSize
+	ldir
+	;Write the page number
+	;in a,(6)
+	;ld (CartridgeName + $C00C),a
+	;Make sure $0038 is not $FF
+	ld hl,$C038
+	ld a,(hl)
+	inc a
+	jr nz,_
+	ld (hl),$C3
+	inc l
+	ld (hl),$53
+	inc l
+	ld (hl),$00
+_
+	;Write the first half to rom
+	ld hl,$4000
+	xor a
+	ld de,$C000
+	ld bc,$2000
+	call WriteFlash
+	ld a,(AppFinalPage)
+	out (7),a
+	ld hl,$A000
+	ld de,$C000
+	ld bc,$2000-96
+	ldir
+	ld a,$81
+	out (7),a
+	ld hl,$8000-96
+	ld bc,96
+	ldir
+	ld hl,$6000
+	xor a
+	ld de,$C000
+	ld bc,$2000
+	call WriteFlash
+	
+	ld c,$8C
+	call DisplayNintendo
+	
+	;Copy first 8KB of the save file from ram page 2 to ram page 1
+	ld a,2
+	out (5),a
+	ld hl,$C000
+	ld de,$A000
+	ld bc,$2000
+	ldir
+	
+	;Copy code temporarily to ram page 0
+	xor a
+	out (5),a
+	ld hl,rompage3code
+	ld de,$C000
+	ld bc,rompage3codesize
+	ldir
+	
+	;Generate LUTs temporarily on ram page 0
+	ld hl,tileLUT + $8000
+	xor a
+_
+	ld (hl),a
+	add a,16
+	inc l
+	jr nz,-_
+	
+	inc h
+	ld b,$7f
+_
+	ld a,l
+	and 15
+	jr nz,$+3
+	inc b
+	ld (hl),b
+	inc l
+	jr nz,-_
+	
+	ld hl,tileLUT - 128 + $8000
+	ld b,$87
+_
+	ld a,l
+	and 15
+	jr nz,$+3
+	inc b
+	ld (hl),b
+	inc l
+	jp po,-_
+	
+	ld hl,bit4LUT0 + $8000
+_
+	xor a
+	rlc l \ rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rlc l \ rla
+	ld (hl),a
+	inc l
+	jr nz,-_
+	
+	inc h
+_
+	xor a
+	rlc l \ rla \ rlc l
+	rlc l \ rla \ rlc l
+	rlc l \ rla \ rlc l
+	rlc l \ rla \ rlc l
+	ld (hl),a
+	inc l
+	jr nz,-_
+	
+_
+	ld h,(rotflipLUT >> 8) + $80
+	ld a,l
+	rrca
+	rrca
+	xor l
+	and %10101010
+	xor l
+	ld b,a
+	rrca
+	rrca
+	rrca
+	rrca
+	xor b
+	and %01100110
+	xor b
+	rrca
+	ld b,8
+_
+	ld (hl),a
+	inc h
+	rrc l
+	djnz -_
+	inc l
+	jr nz,--_
+	
+_
+	ld h,(fliprotLUT >> 8) + $80
+	ld a,l
+	rrca
+	rrca
+	xor l
+	and %10101010
+	xor l
+	ld b,a
+	rrca
+	rrca
+	rrca
+	rrca
+	xor b
+	and %01100110
+	xor b
+	rrca
+	ld b,8
+_
+	ld (hl),a
+	inc h
+	rrca
+	djnz -_
+	inc l
+	jr nz,--_
+	
+_
+	ld h,(rotLUT >> 8) + $80
+	ld a,l
+	ld b,8
+_
+	ld (hl),a
+	inc h
+	rlca
+	djnz -_
+	inc l
+	jr nz,--_
+	
+	ld h,(bit6LUT0 >> 8) + $80
+_
+	xor a
+	rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rla
+	rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rla
+	ld (hl),a
+	inc l
+	jr nz,-_
+	
+	inc h
+_
+	xor a
+	rlc l \ rlc l \ rla
+	rlc l \ rla
+	rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rla
+	rlc l \ rla
+	ld (hl),a
+	inc l
+	jr nz,-_
+	
+	ld h,(bit5LUT0 >> 8) + $80
+_
+	xor a
+	rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rlc l \ rla
+	rlc l \ rla
+	rlc l \ rlc l \ rla
+	ld (hl),a
+	inc l
+	jr nz,-_
+	
+	inc h
+_
+	xor a
+	rlc l \ rla
+	rlc l \ rla \ rlc l
+	rlc l \ rla \ rlc l
+	rlc l \ rla
+	rlc l \ rla \ rlc l
+	ld (hl),a
+	inc l
+	jr nz,-_
+	
+	ld c,$8D
+	call DisplayNintendo
+	
+	;Write the contents of RAM page 0 to ROM page 3
+	ld hl,$4000
+	ld a,$03
+	ld de,$C000
+	ld b,h
+	ld c,l
+	call WriteFlash
+	
+	ld c,$8E
+	call DisplayNintendo
+	
+	;Make all RAM executable
+	xor a
+	out ($25),a
+	dec a
+	out ($26),a
+	
+	;Lock Flash
+	call LockFlash
+	
+	
+	#include setup.z80
+	
+;EndlessLoop:
+;	in a,($10)
+;	rla
+;	jr c,EndlessLoop
+;	ld a,$FF \ out ($11),a
+;	jr EndlessLoop
+	
+Recover:
+	xor a
+	out ($20),a
+	out ($27),a
+	out ($28),a
+	out ($36),a
+	out (0),a
+	
+	ld sp,saveSScreen+768
+	
+	;Copy save file from second 8KB of ram page 1 to first 8KB of ram page 2
+	ld a,$81
+	out (7),a
+	ld a,2
+	out (5),a
+	ld hl,$A000
+	ld de,$C000
+	ld bc,$2000
+	ldir
+	
+	;Restore first 16KB of RAM from flash page 1
+	ld a,1
+	out (7),a
+	out (5),a
+	ld hl,$8000
+	ld de,$C000
+	ld bc,$4000
+	ldir
+	
+	xor a
+	out (5),a
+	ld a,$81
+	out (7),a
+	; Get number of pages to save
+	ld a,(maxRamPageUsed)
+	inc a
+	ld (RamPagesToSave),a
+	; Get last cartridge page mapped
+	ld a,(pageB)
+	ld (finalRamPageMapped),a
+	
+	;Restore last 16KB of RAM from flash page 2
+	ld a,2
+	out (7),a
+	ld hl,$8000
+	ld de,$C000
+	ld bc,$4000
+	ldir
+	ld a,$81
+	out (7),a
+	
+	;Unlock Flash
+	call UnlockFlash
+	
+	;Erase sector 00h
+	ld b,00h
+	call EraseSector
+	jr c,$
+	
+	;Copy the swap sector to sector 00h
+	ld a,(SwapSectorPage)
+	ld b,a
+	ld c,$00
+	ld hl,Byte0000
+	call CopySector
+	
+	;Restore RAM permissions
+	ld hl,(RamPermissions)
+	ld a,l
+	out ($25),a
+	ld a,h
+	out ($26),a
+	
+	;Lock Flash
+	call LockFlash
+	
+	ld sp,(onSP)
+	ld iy,flags
+	
+	;Check if TI-Boy bailed out because of insufficient RAMs
+	ld hl,(FinalRamPageMapped)
+	ld a,l
+	sub $81
+	cp h
+	jp nc,ExtraRamMissing
+	
+	;Copy save data to the save appvar(s)
+	ld a,(RamSize)
+	dec a
+	cp 2
+	jr nc,++_
+	call SaveAppvar8K
+	ld hl,$4012 - 1
+	rst 20h
+	ld a,AppVarObj
+	ld (OP1),a
+	ld hl,OP1+9
+	ld a,' '
+_
+	ld (hl),0
+	dec hl
+	cp (hl)
+	jr z,-_
+	bcall(_Arc_Unarc)
+	jr ++_
+_
+	call z,SaveAppvar32K
+_
+	
+	;Restore "previous entries" on OS 2.53MP from appbackupscreen, and clear the 2.53MP buffer (located directly afterward)
+	ld a,3
+	out (5),a
+	ld hl,appBackUpScreen
+	ld de,previousEntriesMP + $4000
+	ld bc,768
+	ldir
+	ld h,d
+	ld l,e
+	inc de
+	ld bc,767
+	xor a
+	ld (hl),a
+	ldir
+	out (5),a
+	
+	;Return
+	ld a,$0b
+	out (3),a
+	im 1
+	ei
+	bcall(_JForceCmdNoChar)
+	
+LoadAppvar32K:
+	ld hl,$8200
+	ld a,h
+	out (7),a
+	ld (hl),a
+	inc a
+	out (7),a
+	ld (hl),a
+	dec a
+	out (7),a
+	cp (hl)
+	dec a
+	out (7),a
+	
+	ld a,2
+	jr c,_
+	add a,a
+_
+	ld (MaxRamPage),a
+	ld b,a
+	
+	ld hl,$4012 - 1
+	rst 20h
+	ld a,appvarobj
+	ld (op1),a
+	ld hl,op1+8
+	ld a,' '
+_
+	ld (hl),0
+	dec hl
+	cp (hl)
+	jr z,-_
+	inc hl
+	ld (hl),'1'
+	xor a
+LoadAppvar32KLoop:
+	push af
+	push bc
+	push hl
+	bcall(_chkfindsym)
+	pop hl
+	push hl
+	ex de,hl
+	jr nc,$+4 \ ld c,0
+	call nc,LoadAppvarFromRamOrRom
+	pop hl
+	inc (hl)
+	pop af
+	ld b,a
+	pop af
+	or c
+	djnz LoadAppvar32KLoop
+	jp nz,AppVarDone
+	ld hl,8500
+	bcall(_EnoughMem)
+	jp c,MemError
+	jp AppVarDone
+	
+ExtraRamMissing:
+	;Restore "previous entries" on OS 2.53MP from appbackupscreen, and clear the 2.53MP buffer (located directly afterward)
+	ld a,3
+	out (5),a
+	ld hl,appBackUpScreen
+	ld de,previousEntriesMP + $4000
+	ld bc,768
+	ldir
+	ld h,d
+	ld l,e
+	inc de
+	ld bc,767
+	xor a
+	ld (hl),a
+	ldir
+	out (5),a
+	
+	;Return
+	ld a,$0b
+	out (3),a
+	im 1
+	ei
+	bcall(_clrscrnfull)
+	call AppPutS
+	.db "This TI-84+(SE) "
+	.db "revision doesn't"
+	.db "have a RAM chip "
+	.db "large enough to "
+	.db "emulate this    "
+	.db "cartridge. See  "
+	.db "readme for info.",0
+	bcall(_GetKey)
+	bcall(_JForceCmdNoChar)
+	
+SaveAppvar32K:
+	ld hl,$4012 - 1
+	rst 20h
+	ld a,appvarobj
+	ld (op1),a
+	ld hl,op1+8
+	ld a,' '
+_
+	ld (hl),0
+	dec hl
+	cp (hl)
+	jr z,-_
+	inc hl
+	ld (hl),'0'
+SaveAppvar32KLoop1:
+	inc (hl)
+	push hl
+	bcall(_chkfindsym)
+	jr c,_
+	bcall(_delvararc)
+	;DelVarArc destroys (OP1), and TI never told anybody >_<
+	ld a,appvarobj
+	ld (OP1),a
+_
+	ld hl,RamPagesToSave
+	dec (hl)
+	pop hl
+	jr nz,SaveAppvar32KLoop1
+SaveAppvar32KLoop2:
+	push hl
+	ld hl,$2000
+	bcall(_createappvar)
+	inc de
+	inc de
+	push de
+	ld hl,OP4
+	rst 20h
+	pop de
+	pop hl
+	ld b,(hl)
+	push hl
+	call CopyToAppvar
+	bcall(_arc_unarc)
+	pop hl
+	dec (hl)
+	ld a,(hl)
+	cp '0'
+	jr nz,SaveAppvar32KLoop2
+	ret
+	
+AppPutS:
+	pop hl
+_
+	ld a,(hl)
+	inc hl
+	or a
+	jr z,_
+	bcall(_PutC)
+	jr -_
+_
+	jp (hl)
+	
+PutSplashScreen:
+	ld hl,SplashScreen
+	ld de,$8020
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,7
+	out ($10),a
+PutSplashScreenRow:
+	ld c,$10
+_
+	in a,(c)
+	jp m,-_
+	out (c),d
+_
+	in a,(c)
+	jp m,-_
+	out (c),e
+	ld bc,$0C11
+PutSplashScreenByte:
+_
+	in a,($10)
+	rla
+	jr c,-_
+	outi
+	jr nz,PutSplashScreenByte
+	inc d
+	bit 6,d
+	jr z,PutSplashScreenRow
+	ret
+	
+SplashScreen:
+	#include "splash.bmp"
+	
+WriteFlashCode:
+	.org saveSScreen
+WriteFlash:
+	;DE = Source
+	;AHL = Destination
+	;BC = Length
+	;Returns with carry set if failure
+	push af
+	in a,(6)
+	ld (backup_page),a
+	pop af
+	out (6),a
+	
+	#ifdef fast_write
+		;Set fast write mode
+		ld a,$AA
+		ld ($AAA),a
+		ld a,$55
+		ld ($555),a
+		ld a,$20
+		ld ($AAA),a
+	#endif
+	
+WriteFlashLoop:
+	#ifdef fast_write
+		ld (hl),$A0
+	#else
+		ld a,$AA
+		ld ($AAA),a
+		ld a,$55
+		ld ($555),a
+		ld a,$A0
+		ld ($AAA),a
+	#endif
+	ld a,(de)
+	ld (hl),a
+	inc de
+	dec bc
+	and $80
+	ld (WriteByteMSB),a
+WriteByteWait:
+	ld a,(hl)
+WriteByteMSB = $+1
+	xor 0
+	jp p,WriteByteDone
+	bit 5,a
+	jr z,WriteByteWait
+	scf
+	jr WriteByteFailure
+	
+WriteByteDone:
+	inc hl
+	ld a,b
+	or c
+	jr nz,WriteFlashLoop
+	
+	;Returns with carry reset due to "or" instruction
+	
+WriteByteFailure:
+	;assumes BC < 32768 (a quite valid assumption)
+	#ifdef fast_write
+		;Reset from fast mode
+		ld a,$90
+		ld (bc),a
+	#endif
+	;Read/Reset
+	ld a,$F0
+	ld (bc),a
+backup_page = $+1
+	ld a,0
+	out (6),a
+	ret
+	
+EraseSector:
+	;B = a page in the sector
+	in a,(6)
+	push af
+	
+	ld a,b
+	out (6),a
+	
+	ld hl,$AAA
+	ld de,$555
+	ld a,e
+	ld (hl),l
+	ld (de),a
+	ld (hl),$80
+	ld (hl),l
+	ld (de),a
+	ld hl,$4000
+	ld (hl),$30
+	
+EraseWait:
+	ld a,(hl)
+	rla
+	jr c,EraseDone
+	rla
+	rla
+	jr nc,EraseWait
+	pop af
+	out (6),a
+	scf
+	ret
+EraseDone:
+	pop af
+	out (6),a
+	or a
+	ret
+	
+	;B holds the sector to copy from
+	;C holds the sector to copy to
+	;HL points to first byte to write (because special first bytes are needed for sector identification)
+CopySector:
+	in a,(6)
+	push af
+	ld a,3
+	out (5),a
+	ld a,b
+	out (6),a
+CopySectorLoop:
+	push bc
+	ld de,$C000
+	ld bc,$2000
+	ldi
+	ld hl,$4001
+	ldir
+	pop bc
+	push bc
+	ld hl,$4000
+	ld a,c
+	ld de,$c000
+	ld bc,$2000
+	call WriteFlash
+	pop bc
+	jr c,CopySectorFailed
+	
+	push bc
+	ld hl,$6000
+	ld de,$c000
+	ld bc,$2000
+	ldir
+	pop bc
+	push bc
+	ld hl,$6000
+	ld a,c
+	ld de,$c000
+	ld bc,$2000
+	call WriteFlash
+	pop bc
+	jr c,CopySectorFailed
+	
+	inc b
+	inc c
+	ld a,b
+	out (6),a
+	and 3
+	ld hl,$4000
+	jr nz,CopySectorLoop
+	
+	;Carry is reset here if success
+CopySectorFailed:
+	;Doesn't destroy carry
+	pop bc
+	ld a,b
+	out (6),a
+	ld a,0
+	out (5),a
+	ret
+	
+LoadFile:
+	in a,(6)
+	push af
+	ld a,$82
+	out (6),a
+	ld (SaveFileLoc),hl
+	ld de,$4000
+	ld bc,$2000
+	ldir
+	pop af
+	out (6),a
+	ret
+	
+SaveAppvar8K:
+	ld b,'1'
+SaveFileLoc = $+1
+	ld de,0
+CopyToAppvar:
+	in a,(6)
+	push af
+	ld hl,$6000
+	ld a,b
+	cp '1'
+	jr nz,_
+	inc a
+	ld h,$40
+_
+	add a,$82-'2'
+	out (6),a
+	ld bc,$2000
+	ldir
+	pop af
+	out (6),a
+	ret
+	
+LoadAppvarFromRamOrRom:
+	in a,(6)
+	push af
+	ld a,b
+	or a
+	ld a,(de)
+	jr nz,LoadAppvarFromRom
+	ld de,$6000
+	cp '1'
+	jr nz,_
+	inc a
+	ld d,$40
+_
+	add a,$82-'2'
+	out (6),a
+	inc hl
+	inc hl
+	ld bc,$2000
+	ldir
+	pop af
+	out (6),a
+	inc c
+	ret
+LoadAppvarFromRom:
+	ld de,$E000
+	cp '1'
+	jr nz,_
+	inc a
+	ld d,$C0
+_
+	add a,2-'2'
+	out (5),a
+	ld a,b
+	out (6),a
+	ld b,0
+	add hl,bc
+	ld c,12
+	add hl,bc
+	ld bc,$2000
+_
+	bit 7,h
+	jr z,_
+	res 7,h
+	set 6,h
+	inc a
+	out (6),a
+_
+	ldi
+	jp pe,--_
+	xor a
+	out (5),a
+	pop af
+	out (6),a
+	ret
+	
+RamRecover:
+	in a,(4)
+	bit 3,a
+	jr nz,RamRecover
+	
+	xor a
+	out ($27),a
+	out ($28),a
+	out ($20),a
+	ld a,3
+	out ($10),a
+	dec a
+	out (5),a
+	
+	ld sp,saveSScreen+768
+	
+	;Copy save file from second 8KB of ram page 1 to first 8KB of ram page 2
+	ld hl,$A000
+	ld de,$C000
+	ld bc,$2000
+	ldir
+	
+	;Restore second 8KB of the first 16KB of RAM from flash page 1
+	ld hl,$6000
+	ld de,$A000
+	ld bc,$2000
+	ldir
+	
+	;Restore last 16KB of RAM from flash page 2
+	ld a,2
+	out (6),a
+	xor a
+	out (5),a
+	ld hl,$4000
+	ld de,$C000
+	ld b,h
+	ld c,l
+	ldir
+	
+	;Unlock Flash
+	call UnlockFlash
+	
+	;Erase sector 00h
+	ld b,00h
+	call EraseSector
+	jr c,RamRecover
+	
+	;Copy the swap sector to sector 00h
+	ld a,(SwapSectorPage)
+	ld b,a
+	ld c,$00
+	ld hl,Byte0000
+	call CopySector
+	
+	;Lock Flash
+	call LockFlash
+	
+	ld sp,(onSP)
+	ld iy,flags
+	
+	;Copy save data to the save appvar(s)
+	ld a,(RamSize)
+	dec a
+	cp 2
+	call c,SaveAppvar8K
+	;32K saving not supported for crash recovery
+	;call z,SaveAppvar32K
+	
+	;Restore "previous entries" on OS 2.53MP from appbackupscreen, and clear the 2.53MP buffer (located directly afterward)
+	ld a,3
+	out (5),a
+	ld hl,appBackUpScreen
+	ld de,previousEntriesMP + $4000
+	ld bc,768
+	ldir
+	ld h,d
+	ld l,e
+	inc de
+	ld bc,767
+	xor a
+	ld (hl),a
+	ldir
+	out (5),a
+	
+	;Return
+	ld a,$0b
+	out (3),a
+	im 1
+	
+	ld hl,$A55A
+	ld ($85BE),hl
+	jp $0053
+	;ei
+	;bcall(_ClrScrnFull)
+	;ld hl,CrashMessage
+	;bcall(_PutS)
+	;bcall(_GetKey)
+	;bcall(_JForceCmdNoChar)
+	
+;CrashMessage:
+;	.db "TI-Boy SE has   "
+;	.db "recovered from  "
+;	.db "a crash. None of"
+;	.db "your data has   "
+;	.db "been lost.",0
+	
+UnlockFlash:
+;	di
+	in	a, (06)
+	push	af
+
+	ld	hl, ReturnPoint+$8138-$80FE
+	ld	de, $8138
+
+	ld	a, d
+	out	(05), a
+	dec	a
+	ld	i, a
+	dec	a
+	out	(06), a
+
+	in	a, (02)
+	and	e
+	jr	z, $+4
+	ld	e, $02
+
+	ld	b, d
+	ld	c, e
+	lddr
+
+	ex	de, hl
+	add	hl, sp
+	ex	de, hl
+	ld	sp, $82A9+$4000
+
+	jp	nz, $4529
+	call	$4276
+
+ReturnPoint:
+	ex	de, hl
+	ld	sp, hl
+
+	out	(05), a
+	pop	af
+	out	(06), a
+	ret
+	
+#comment
+;###################################
+;unlock flash on 83+SE and 84+BE/SE
+;by Brian Coventry (modified by calc84maniac)
+UnlockFlash:
+	in a,(6)
+	push af
+	ld (saveSP),sp
+	ld a,$7F
+	out (6),a
+	cpl
+	ld i,a
+	rlca
+	out	(5),a
+	in a,(2)
+	bit 5,a
+	ld a,$C3	;jp
+	ld hl,returnPoint
+	ld sp,$82A9+$4000
+	jr z, _83PlusSE
+_84Plus:
+	ld ($80C8), a
+	ld ($80C9), hl
+	jp $4529
+_83PlusSE:
+	ld ($80FE), a
+	ld ($80FF), hl
+	call $4276
+returnPoint:
+saveSP = $+1
+	ld sp,0
+	xor a
+	out (05),a
+	pop af
+	out (06),a
+	ret
+#endcomment
+	
+LockFlash:
+	in a,(6)
+	push af
+	ld a,$7B
+	out (6),a
+	ld hl,(_FlashWriteDisable)
+	ld a,(_FlashWriteDisable+2)
+	out (6),a
+	call JumpHL
+	pop af
+	out (6),a
+	ret
+	
+JumpHL:
+	jp (hl)
+	
+Byte0000:
+	.db 0
+SwapSectorPage:
+	.db 0
+AppFinalPage:
+	.db 0
+CartridgeType:
+	.db 0
+RamSize:
+	.db 0
+SwapSectorIdentifier:
+	.db $FE
+RamPermissions:
+	.dw 0
+FinalRamPageMapped:
+	.db 0
+MaxRamPage:
+	.db 2
+RamPagesToSave:
+	.db 0
+	
+PatchPageCopy:
+	in a,(6)
+	push af
+	ld a,$7B
+	out (6),a
+	ld hl,(_CopyFlashPage)
+	ld a,(_CopyFlashPage+2)
+	out (6),a
+	ld a,$28
+ThisEqualsZero = $+2
+	ld bc,20
+	cpir
+	jr nz,PatchFail
+	in a,(6)
+	ld de,ThisEqualsZero
+	ld bc,1
+	call WriteFlash
+	jr c,PatchFail
+	pop af
+	out (6),a
+	or a
+	ret
+	
+PatchFail:
+	pop af
+	out (6),a
+	scf
+	ret
+	
+TimerInterruptBackup:
+	.block 16
+	
+WriteFlashCodeSize = $ - WriteFlash
+	.org WriteFlashCode + WriteFlashCodeSize
+	
+.echo "Setup RAM code size is ", WriteFlashCodeSize
+	
+RebootEntryCode:
+	jp TimerInterruptReplacement
+	jp CartridgeName
+	.dw $A55A
+	
+RebootCode:
+	ld a,$81
+	out (7),a
+	ld a,$01
+	out (6),a
+	ld hl,$4000
+	ld de,$8000
+	ld bc,$2000
+	ldir
+	jp RamRecover
+RebootCodeSize = $ - RebootCode
+
+	;Input: C = row+$80
+DisplayNintendo:
+	ld hl,Nintendo
+	ld b,5
+	ld a,c
+	sub $8B
+	jr nc,DisplayNintendoLoop
+	
+	ld c,$8B
+_
+	inc hl
+	inc hl
+	dec b
+	inc a
+	jr nz,-_
+	
+DisplayNintendoLoop:
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,$21
+	out ($10),a
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	
+	ld a,(hl)
+	inc hl
+	ld d,(hl)
+	inc hl
+	ld e,$FB
+	scf
+_
+	rra
+	rr d
+	rr e
+	jr c,-_
+	
+	out ($11),a
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,d
+	out ($11),a
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,e
+	out ($11),a
+	
+	inc c
+	djnz DisplayNintendoLoop
+	ret
+	
+Nintendo:
+	.db $00,$00
+	.db $D2,$04
+	.db $AB,$44
+	.db $BE,$BB
+	.db $BD,$6F
+	
+MBC1 = 0
+MBC2 = 1
+MBC3 = 2
+MBC5 = 3
+	
+CartridgeLookup:
+	.db MBC1,MBC1,MBC1,MBC1,-1,MBC2,MBC2,-1,MBC1,MBC1,-1,-1,-1,-1,-1,MBC3
+	.db MBC3,MBC3,MBC3,MBC3,-1,-1,-1,-1,-1,MBC5,MBC5,MBC5,MBC5,MBC5,MBC5
+	
+	#include opcodes_crazy.z80
+	#include hardware.z80
+	
+	.echo "Left on page 0: ", $8000-96-$
+	
+	.block $8000-96-$

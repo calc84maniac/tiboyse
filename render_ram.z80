@@ -1,0 +1,136 @@
+spriteloop_gray:
+	ld a,(de)
+	xor (hl)
+	and iyh
+	xor (hl)
+	exx
+	ld c,a
+	ld a,(bc)
+sprite_palette_smc_gray = $+1
+	call 0
+	ld e,a
+	ld a,(de)
+	exx
+	ld c,a
+	xor (hl)
+	and iyl
+	xor (hl)
+	ld (hl),a
+	ld a,(de)
+	xor c
+	and iyl
+	xor c
+	ld (de),a
+	dec e
+	dec l
+	
+spriteloop:
+	ld a,(de)
+	xor (hl)
+	and iyh
+	xor (hl)
+	exx
+	ld c,a
+	ld a,(bc)
+sprite_palette_smc = $+1
+	call 0
+sprite_flip_smc:
+	inc l
+	inc l
+	ld e,a
+	ld a,(de)
+	exx
+	ld c,a
+	xor (hl)
+	and iyl
+	xor (hl)
+	ld (hl),a
+	ld a,(de)
+	xor c
+	and iyl
+	xor c
+	ld (de),a
+	dec de
+	dec hl
+sprite_loop_smc = $+1
+	djnz spriteloop
+sprite_next_smc = $+1
+	jp draw_next_sprite
+	
+;Input: DE = pointer to first tile, DE' = pointer to buffer, B = row within tile, C = rows to draw, B' = columns to draw, C' = mask
+rasterlines:
+	ex de,hl
+	ld a,8
+	sub b
+	ld b,a
+rasterloop0:
+	push bc
+	push hl
+	exx
+bufferHeight = $+1
+	ld hl,128 + 15
+	add hl,de
+	ex de,hl
+	push de
+	exx
+	ld a,16
+	sub b
+	sub b
+rasterloop1:
+	ld e,(hl)
+	ld d,tileLUT >> 8
+	ex de,hl
+	add a,(hl)
+rastersmc1:
+	inc h
+	ld h,(hl)
+	ld l,a
+	ld a,c
+	sub b
+	jr nc,_
+	ld b,c
+	xor a
+_
+	ld c,a
+rasterloop2:
+	nop \ nop \ nop \ nop \ nop ;allow room for palette mod
+	nop \ nop \ nop \ nop  ;allow room for rotation mod
+	dec l
+	exx
+	ld (de),a
+	xor (hl)
+	and c
+	xor (hl)
+	ld (hl),a
+	inc e
+	inc l
+	exx
+	nop \ nop \ nop \ nop \ nop ;allow room for second palette mod
+	nop \ nop \ nop \ nop  ;allow room for second rotation mod
+	inc l
+	exx
+	ld (de),a
+	xor (hl)
+	and c
+	xor (hl)
+	ld (hl),a
+	inc de
+	inc hl
+	exx
+	djnz rasterloop2
+	ld a,e
+	add a,$20
+	ld l,a
+	ld a,d
+	jr nc,_
+	inc a
+	xor d
+	and %00000011
+	xor d
+_
+	ld h,a
+	ld b,8
+	xor a
+	cp c
+	jp nz,0 ;rasterloop1
+	jp 0 ;rastercolumnend

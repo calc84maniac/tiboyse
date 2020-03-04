@@ -1,0 +1,1780 @@
+MAX_FREQ = $F8
+LOOP_MAX_SIZE = 16
+loop_page = $FF73
+loop_negptr = $FF74
+loop_size = $FF76
+soundOutputs = $FF78
+NR10_backup = $FF7A
+NR43_backup = $FF7B
+NR12_backup = $FF7C
+NR22_backup = $FF7D
+NR42_backup = $FF7E
+NR52_backup = $FF7F
+
+bufferBase = $C200
+	
+rompage3code:
+	.org $4000
+	
+	.block (-$-8) & $FF
+	;    D_L_DD_L, D_D_LD_D, L_D_DL_D, D_L_DD_L, D_D_LD_D
+	.db %10001100,%10100101,%00101001,%10001100,%10100101
+	;    _L_D_D_L, _D_L_D_D, _D_D_L_D
+	.db %00010100,%01000101,%01010001
+	
+graydithers:
+	.db 0,%11011011,%10110110,%01101101
+	
+toggleSound:
+	di
+	ld hl,channelSelect
+	ld a,(hl)
+	or a
+	jr nz,turnSoundOff
+	
+	inc (hl)
+	ld a,$A0
+	out ($30),a
+	out ($33),a
+	ld a,2
+	out ($31),a
+	out ($34),a
+	dec a
+	out ($32),a
+	out ($35),a
+	
+	ld a,$82
+	out ($36),a
+	ld a,$FF
+	out ($37),a
+	out ($38),a
+	
+	ld a,5
+	out (3),a
+	
+	push bc
+	push de
+	;ld hl,(bufferHeight)
+	;push hl
+	
+	ld hl,$E000-1
+	ld de,page3code
+	ld bc,vars-$E000-bytes_skipped_1 + 1
+	scf
+	call decompressRAM
+	
+	;ld hl,opcodeFB_B-1
+	;ld de,page3code + (opcodeFB_B-$E000-bytes_skipped_2)
+	;ld bc,$FE00-opcodeFB_B-(bytes_skipped-bytes_skipped_2) + 1
+	;scf
+	;call decompressRAM
+	
+	;pop hl
+	;ld (bufferHeight),hl
+	pop de
+	pop bc
+	
+	in a,(1)
+	rla
+	jr nc,$-3
+	ret
+	
+turnSoundOff:
+	xor a
+	ld (hl),a
+	out ($31),a
+	out ($34),a
+	out ($37),a
+	inc a
+	out (3),a
+	ld a,$44
+	out ($36),a
+	ld a,2
+	out ($37),a
+	dec a
+	out ($38),a
+	
+	push bc
+	push de
+	;ld hl,(bufferHeight)
+	;push hl
+	
+	ld hl,$E000-1
+	ld de,page3code
+	ld bc,vars-$E000-bytes_skipped_1 + 1
+	or a
+	call decompressRAM
+	
+	;ld hl,opcodeFB_B-1
+	;ld de,page3code + (opcodeFB_B-$E000-bytes_skipped_2)
+	;ld bc,$FE00-opcodeFB_B-(bytes_skipped-bytes_skipped_2) + 1
+	;or a
+	;call decompressRAM
+	
+	ld hl,irq
+	ld ($FDFE),hl
+	
+	;pop hl
+	;ld (bufferHeight),hl
+	pop de
+	pop bc
+	
+	in a,(1)
+	rla
+	jr nc,$-3
+	ret
+	
+handleSound:
+	ld a,1
+	out (3),a
+	ld a,5
+	out (3),a
+	ld hl,channelSelect
+	dec (hl)
+	jp nz,maybeChannel2
+	ld (hl),4
+	ld hl,NR14
+	ld a,(hl)
+	rla
+	jr nc,_
+	res 7,(hl)
+	ld l,$FF
+	ld (chan1cnt),hl
+	ld l,NR52 & $FF
+	set 0,(hl)
+	ld l,NR52_backup & $FF
+	set 0,(hl)
+_
+	ld l,NR52 & $FF
+	bit 0,(hl)
+	ret z
+	
+	rla
+	jr nc,_
+	ld l,NR11 & $FF
+	ld a,(hl)
+	rlca
+	rlca
+	add a,4
+	rrca
+	rrca
+	ld (hl),a
+	jr nc,_
+	ld l,NR52 & $FF
+	res 0,(hl)
+channel1mute:
+	ld l,NR52_backup & $FF
+	res 0,(hl)
+	ld l,soundOutputs & $FF
+	res 1,(hl)
+	ld hl,0
+	ld (chan1div0),hl
+	ld (chan1div1),hl
+	ret
+_
+	
+	ld a,(NR51)
+	and %00010001
+	jr z,channel1mute
+	ld l,NR12 & $FF
+	ld a,(hl)
+	and $F0
+	jr z,channel1mute
+	ld a,(hl)
+	and 7
+	jr z,++_
+	bit 3,(hl)
+	jr nz,++_
+	ld a,(NR12_backup)
+	or a
+	jr nz,_
+	ld a,(hl)
+	and 7
+	add a,a
+	add a,a
+_
+	dec a
+	ld (NR12_backup),a
+	jr nz,_
+	ld a,(hl)
+	sub $10
+	ld (hl),a
+_
+	
+	push de
+	ld l,NR10 & $FF
+	ld a,(hl)
+	and %01110000
+	jr z,++_
+	ld e,a
+	ld l,NR10_backup & $FF
+	ld a,(hl)
+	or a
+	jr nz,_
+	ld a,e
+	rrca
+	rrca
+	rrca
+_
+	dec a
+	ld (hl),a
+	jr nz,_
+	ld hl,(NR13)
+	ld a,h
+	and 7
+	ld h,a
+	ld d,h
+	ld e,l
+	ld a,(NR10)
+	and 7
+	jr z,$+9
+	srl d
+	rr e
+	dec a
+	jr nz,$-5
+	ld a,(NR10)
+	and 8
+	jr nz,$+5
+	add hl,de
+	jr $+4
+	sbc hl,de
+	ld a,(NR14)
+	xor h
+	and $F8
+	xor h
+	ld h,a
+	ld (NR13),hl
+_
+	
+	ld hl,(NR13)
+	ld a,h
+	or $F8
+	ld h,a
+	inc a
+	jr nz,_
+	ld a,MAX_FREQ
+	cp l
+	jr nc,_
+	ld l,a
+_
+	ld d,h
+	ld e,l
+	ld a,(NR11)
+	cp $40
+	jp pe,++_
+	jr nc,_
+	sra d
+	rr e
+_
+	sra d
+	rr e
+	add hl,hl
+	sbc hl,de
+_
+	inc hl
+	res 0,l
+	res 0,e
+	ld (chan1div1),de
+	ld (chan1div0),hl
+	pop de
+	ret
+	
+maybeChannel2:
+	ld a,(hl)
+	dec a
+	jp nz,maybeChannel3
+	ld hl,NR24
+	ld a,(hl)
+	rla
+	jr nc,_
+	res 7,(hl)
+	ld l,$FF
+	ld (chan2cnt),hl
+	ld l,NR52 & $FF
+	set 1,(hl)
+	ld l,NR52_backup & $FF
+	set 1,(hl)
+_
+	ld l,NR52 & $FF
+	bit 1,(hl)
+	ret z
+	
+	rla
+	jr nc,_
+	ld l,NR21 & $FF
+	ld a,(hl)
+	rlca
+	rlca
+	add a,4
+	rrca
+	rrca
+	ld (hl),a
+	jr nc,_
+	ld l,NR52 & $FF
+	res 1,(hl)
+channel2mute:
+	ld l,NR52_backup & $FF
+	res 1,(hl)
+	ld l,soundOutputs+1 & $FF
+	res 0,(hl)
+	ld hl,0
+	ld (chan2div0),hl
+	ld (chan2div1),hl
+	ret
+_
+	
+	ld a,(NR51)
+	and %00100010
+	jr z,channel2mute
+	ld l,NR22 & $FF
+	ld a,(hl)
+	and $F0
+	jr z,channel2mute
+	ld a,(hl)
+	and 7
+	jr z,++_
+	bit 3,(hl)
+	jr nz,++_
+	ld a,(NR22_backup)
+	or a
+	jr nz,_
+	ld a,(hl)
+	and 7
+	add a,a
+	add a,a
+_
+	dec a
+	ld (NR22_backup),a
+	jr nz,_
+	ld a,(hl)
+	sub $10
+	ld (hl),a
+_
+	
+	push de
+	ld hl,(NR23)
+	ld a,h
+	or $F8
+	ld h,a
+	inc a
+	jr nz,_
+	ld a,MAX_FREQ
+	cp l
+	jr nc,_
+	ld l,a
+_
+	ld d,h
+	ld e,l
+	ld a,(NR21)
+	cp $40
+	jp pe,++_
+	jr nc,_
+	sra d
+	rr e
+_
+	sra d
+	rr e
+	add hl,hl
+	sbc hl,de
+_
+	inc hl
+	res 0,l
+	res 0,e
+	ld (chan2div1),de
+	ld (chan2div0),hl
+	pop de
+	ret
+	
+maybeChannel3:
+	dec a
+	jr nz,doChannel4
+	ld hl,NR34
+	ld a,(hl)
+	rla
+	jr nc,_
+	res 7,(hl)
+	ld l,$FF
+	ld (chan3cnt),hl
+	ld l,NR52 & $FF
+	set 2,(hl)
+	ld l,NR52_backup & $FF
+	set 2,(hl)
+_
+	ld l,NR52 & $FF
+	bit 2,(hl)
+	ret z
+	
+	rla
+	jr nc,_
+	ld l,NR31 & $FF
+	inc (hl)
+	jr nz,_
+	ld l,NR52 & $FF
+	res 2,(hl)
+channel3mute:
+	ld l,NR52_backup & $FF
+	res 2,(hl)
+	ld l,soundOutputs+1 & $FF
+	res 1,(hl)
+	ld hl,0
+	ld (chan3div),hl
+	ret
+_
+	
+	ld a,(NR51)
+	and %01000100
+	jr z,channel3mute
+	ld a,(NR30)
+	rla
+	jr nc,channel3mute
+	ld l,NR52_backup & $FF
+	set 2,(hl)
+	
+	ld hl,(NR33)
+	ld a,h
+	or $F8
+	ld h,a
+	inc a
+	jr nz,_
+	ld a,MAX_FREQ
+	cp l
+	jr nc,_
+	ld l,a
+_
+	ld (chan3div),hl
+	ret
+	
+doChannel4:
+	ld hl,NR44
+	ld a,(hl)
+	rla
+	jr nc,_
+	res 7,(hl)
+	ld l,$FF
+	ld (chan4cnt),hl
+	ld l,NR52 & $FF
+	set 3,(hl)
+	ld l,NR52_backup & $FF
+	set 3,(hl)
+	push af
+	ld a,(NR43)
+	inc a
+	ld (NR43_backup),a
+	pop af
+_
+	ld l,NR52 & $FF
+	bit 3,(hl)
+	ret z
+	
+	rla
+	jr nc,_
+	ld l,NR41 & $FF
+	ld a,(hl)
+	inc a
+	and $3F
+	ld (hl),a
+	jr nz,_
+	ld l,NR52 & $FF
+	res 3,(hl)
+channel4mute:
+	ld l,NR52_backup & $FF
+	res 3,(hl)
+	ld l,soundOutputs & $FF
+	res 0,(hl)
+	ld h,a
+	ld l,a
+	ld (chan4div),hl
+	ret
+_
+	
+	ld a,(NR51)
+	and %10001000
+	jr z,channel4mute
+	ld l,NR42 & $FF
+	ld a,(hl)
+	and $F0
+	jr z,channel4mute
+	ld a,(hl)
+	and 7
+	jr z,++_
+	bit 3,(hl)
+	jr nz,++_
+	ld a,(NR42_backup)
+	or a
+	jr nz,_
+	ld a,(hl)
+	and 7
+	add a,a
+	add a,a
+_
+	dec a
+	ld (NR42_backup),a
+	jr nz,_
+	ld a,(hl)
+	sub $10
+	ld (hl),a
+_
+	
+	ld a,(NR43)
+	ld l,NR43_backup & $FF
+	cp (hl)
+	ret z
+	ld (hl),a
+	ld h,a
+	and $F8
+	sub h
+	rla
+	dec a
+	ld l,a
+	ld a,h
+	ld h,$FF
+	rlca
+	rlca
+	rlca
+	rlca
+	and $0F
+	jr z,++_
+_
+	add hl,hl
+	dec a
+	jr nz,-_
+_
+	ld a,l
+	add a,$80
+	ld a,h
+	adc a,0
+	jr nc,_
+	ld hl,-$80
+_
+	ld (chan4div),hl
+	ret
+	
+#comment
+loop_infinite:
+	ld a,(de)
+	cp $FE
+	jp z,loop_found_end
+	ret
+	
+check_loop:
+	ld hl,LY
+	ld a,(hl)
+	cp 143
+	ret nc
+	
+	;Find loop jump and take it
+	ld b,LOOP_MAX_SIZE
+loop_find_end:
+	ld a,(de)
+	inc de
+	cp $18
+	jr z,loop_infinite
+	and %11100111
+	cp $20
+	jr z,take_jr
+	sub $C2
+	jr z,take_jp
+	djnz loop_find_end
+	ret
+take_jp:
+	ex de,hl
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	sbc hl,de
+	cp h ;A is ZERO
+	ret z
+	ld a,l
+	cp LOOP_MAX_SIZE
+	jr c,loop_analyze
+	ret
+	
+take_jr:
+	ld a,(de)
+	ld l,a
+	rla
+	ret nc
+	adc hl,de ;CARRY IS SET
+	ex de,hl
+	
+loop_analyze:
+	ld (ix-vars+loop_analyzed),1
+	ld hl,LY
+	ld a,(de)
+	;cp $76 ;halt
+	;jp z,loop_found_end
+	cp $18
+	jr z,loop_infinite
+	cp $7e ;ld a,(hl)
+	jp z,loop_found_first
+	;cp $1a ;ld a,(de)
+	;jr z,loop_found_first
+	;cp $0a ;ld a,(bc)
+	;jr z,loop_found_first
+	cp $be ;cp (hl)
+	jp z,loop_found_second
+	cp $fa ;ld a,(nnnn)
+	jr z,loop_found_first_2
+	cp $f0 ;ld a,($ff00+nn)
+	jr z,loop_found_first_1
+	cp $cb
+	ret nz
+	inc de
+	ld a,(de)
+	;Check for bit b,(hl)
+	and %11000111
+	cp %01000110
+	jp z,loop_found_second
+	ret
+	
+loop_stat_1:
+	ld a,(de)
+	cp h
+	jr nz,loop_found_first
+loop_stat:
+	ld a,(STAT)
+	ld e,a
+	and 3
+	dec a
+	ret z
+	dec a
+	jr z,_
+	inc a
+_
+	xor e
+	and 3
+	xor e
+	ld (STAT),a
+	ld (ix-vars+loop_analyzed),0
+	ret
+	
+loop_found_first_2:
+	inc de
+	ld a,(de)
+	inc de
+	cp $41
+	jr z,loop_stat
+	cp l
+	jr nz,loop_found_first
+	ld a,(de)
+	cp h
+	jr nz,loop_found_first
+loop_ly:
+	inc de
+	ld a,(de)
+	cp $fe
+	ret nz
+	inc de
+	ld a,(de)
+	dec a
+	cp (hl)
+	jr c,loop_found_end
+	cp 144
+	jr c,_
+	ld a,143
+_
+	inc l
+	cp (hl)
+	jr c,_
+	ld iyl,a
+	dec l
+	ld a,(hl)
+	inc l
+	cp (hl)
+	ld a,iyl
+	jr nc,_
+	ld a,(hl)
+	dec a
+_
+	dec l
+	ld (hl),a
+	inc de
+	ld a,(de)
+	and %00011000
+	cp %00001000
+	ret nz
+	inc (hl)
+	ret
+	
+loop_found_first_1:
+	inc de
+	ld a,(de)
+	cp $41
+	jr z,loop_stat
+	cp l
+	jr z,loop_ly
+loop_found_first:
+	inc de
+	
+	ld a,(de)
+	cp $b7 ;or a
+	jr z,loop_found_second
+	cp $a7 ;and a
+	jr z,loop_found_second
+	cp $fe ;cp nn
+	jr z,loop_found_second_1
+	cp $e6 ;and nn
+	jr z,loop_found_second_1
+	and %11111000
+	cp $b8 ;cp reg8
+	jr z,loop_found_second
+	;cp $a0 ;and reg8
+	;jr z,loop_found_second
+	ld a,(de)
+	cp $cb
+	ret nz
+	inc de
+	ld a,(de)
+	;Check for bit b,a
+	and %11000111
+	cp %01000111
+	jr z,loop_found_second
+	ret
+loop_found_second_1:
+	inc de
+loop_found_second:
+	inc de
+	ld a,(de)
+	cp $b7 ;check for redundant "or a" in case of idiot programming (see: Harvest Moon GB)
+	jr z,loop_found_second
+	;inc de
+	and $E7
+	;Check for jp f,nnnn
+	cp $C2
+	jr z,loop_found_end
+	;jr z,check_jp
+	;Check for jr f,nn
+	cp $20
+	ret nz
+	
+;check_jr:
+;	ld a,(de)
+;	inc a
+;	add a,e
+;	cp (ix-vars+last_loop)
+;	jr z,loop_found_end
+;	ret
+	
+;check_jp:
+;	ld a,(de)
+;	cp (ix-vars+last_loop)
+;	ret nz
+;	inc de
+;	ld a,(de)
+;	cp (ix-vars+last_loop+1)
+;	ret nz
+	
+loop_found_end:
+	ld a,(hl)
+	inc l
+	cp (hl)
+	jr nc,_
+	ld a,(hl)
+	dec a
+	cp 144
+	jr nc,_
+	dec l
+	ld (hl),a
+	ret
+_
+	dec l
+	ld (hl),143
+	ret
+#endcomment
+	
+hardwaresound:
+	ld ix,irqflash
+	ld ($FDFE),ix
+	ld a,c
+	ex af,af'
+	push af
+	ei
+	call hardwarenormal
+	di
+	pop af
+	ex af,af'
+	ld c,a
+	ld a,(channelSelect)
+	or a
+	jr z,++_
+_
+	ld hl,irq_sound
+	ld ($FDFE),hl
+	ld a,(LY)
+	cp 144
+	ld ixl,1
+	ret c
+	ld ixl,5
+	ret
+	
+hardwareflash:
+	ld a,(channelSelect)
+	or a
+	jr nz,hardwaresound
+	call hardwarenormal
+	ld a,(channelSelect)
+	or a
+	jr nz,-_
+_
+	ld a,(LY)
+	cp 144
+	ld a,2
+	out ($37),a
+	dec a
+	jr c,_
+	ld a,5
+_
+	out ($38),a
+	ret
+	
+waitloop_check:
+	ld e,1
+	ld a,(hl)
+	cp $76 ;HALT
+	jp z,waitloop_found_end
+	
+	ld b,LOOP_MAX_SIZE
+waitloop_loop:
+	ld a,(hl)
+	inc hl
+	cp $18
+	jr z,waitloop_infinite
+	and %11100111
+	cp $20
+	jr z,waitloop_take_jr
+	cp $C2
+	jr z,waitloop_take_jp
+	djnz waitloop_loop
+	ret
+	
+waitloop_take_jr:
+	xor a
+	ld d,a
+	sub (hl)
+	ld e,a
+	add a,-LOOP_MAX_SIZE
+	ret c
+	sbc hl,de ;CARRY IS RESET
+	jr waitloop_start
+	
+waitloop_take_jp:
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ld a,d
+	add a,$40
+	jp po,$+4 \ ld d,a
+	xor a
+	sbc hl,de
+	ex de,hl
+	cp d
+	ret nz
+	ld a,e
+	cp LOOP_MAX_SIZE
+	ret nc
+	
+waitloop_start:
+	inc hl
+	ld a,(hl)
+	cp $76 ;HALT
+	jr z,waitloop_start
+	cp $7E ;LD A,(HL)
+	jr z,waitloop_found_load
+	cp $1A ;LD A,(DE)
+	jr z,waitloop_found_load
+	cp $0A ;LD A,(BC)
+	jr z,waitloop_found_load
+	;cp $BE ;CP (HL)
+	;jr z,waitloop_found_test
+	inc hl
+	cp $FA ;LD A,(NNNN)
+	jr z,waitloop_found_load_imm16
+	cp $F0 ;LD A,($FF00+NN)
+	jr z,waitloop_found_load_imm8
+	cp $CB
+	ret nz
+	;Check for BIT B,(HL)
+	ld a,(hl)
+	and %11000111
+	cp %01000110
+	jr z,waitloop_found_test
+	ret
+	
+waitloop_infinite:
+	ld e,2
+	ld a,(hl)
+	cp $FE
+	jr z,waitloop_found_end
+	ret
+	
+waitloop_found_load_imm16:
+	ld a,(hl)
+	cp LY & $FF
+	inc hl
+	jr nz,waitloop_found_load
+	ld a,(hl)
+	inc a
+	jr nz,waitloop_found_load
+waitloop_found_load_ly:
+	inc hl
+	ld a,(hl)
+	cp $FE
+	ret nz
+	inc hl
+	ld a,(hl)
+	cp 144
+	jr nc,waitloop_found_test
+	ret
+	
+waitloop_found_load_imm8:
+	ld a,(hl)
+	cp STAT & $FF
+	ret z
+	cp LY & $FF
+	jr z,waitloop_found_load_ly
+waitloop_found_load:
+	inc hl
+	ld a,(hl)
+	cp $B7 ;OR A
+	jr z,waitloop_found_test
+	cp $A7 ;AND A
+	jr z,waitloop_found_test
+	cp $FE ;CP NN
+	jr z,waitloop_found_test_imm8
+	cp $E6 ;AND NN
+	jr z,waitloop_found_test_imm8
+	and %11111000
+	cp $B8 ;CP REG8
+	jr z,waitloop_found_test
+	;cp $A0 ;AND REG8
+	;jr z,waitloop_found_test
+	ld a,(hl)
+	cp $CB
+	ret nz
+	inc hl
+	ld a,(hl)
+	;Check for BIT B,A
+	and %11000111
+	cp %01000111
+	jr z,waitloop_found_test
+	ret
+waitloop_found_test_imm8:
+	inc hl
+waitloop_found_test:
+	inc hl
+	ld a,(hl)
+	cp $B7 ;check for redundant OR A in case of idiot programming (see: Harvest Moon GB)
+	jr z,waitloop_found_test
+	and $E7
+	;Check for JR F,NN
+	cp $20
+	jr z,waitloop_found_end_imm8
+	;Check for JP F,NNNN
+	cp $C2
+	ret nz
+waitloop_found_end_imm16:
+	inc hl
+waitloop_found_end_imm8:
+	inc hl
+waitloop_found_end:
+	ld a,e
+	ld (loop_size),a
+	ld a,l
+	cpl
+	ld l,a
+	in a,($28)
+	or a
+	ld a,h
+	jr nz,$+4 \ sub $40
+	cpl
+	ld h,a
+	ld (loop_negptr),hl
+	ld a,(pageA)
+	ld (loop_page),a
+	ret
+	
+waitloop_analyze:
+	ld a,h
+	add a,$40
+	jp po,_
+	ld h,a
+	xor a
+	out ($28),a
+	ld a,(pageA)
+	out (7),a
+_
+	call waitloop_check
+	ld a,$80
+	out ($28),a
+	ld a,(pageB)
+	out (7),a
+	jr waitloop_end
+	
+hardwarenormal:
+	ld ix,vars
+	
+	ld a,(LY)
+	cp 143
+	jr z,waitloop_analyze
+	jr nc,waitloop_end
+	ex de,hl
+	;ld hl,STAT
+	;ld a,(hl)
+	;rrca
+	;add a,a
+	;jr c,_
+	;bit 1,a
+	;res 1,a
+	;jr nz,_
+	;add a,3
+_
+	;ld (hl),a
+	ld a,(LCDC)
+	ld hl,BGP; & $FF
+	xor (hl)
+	ld hl,(SCY)
+	xor l
+	xor h
+	ld hl,(WY)
+	xor l
+	xor h
+	ld hl,lcdchecksum
+	xor (hl)
+	jr z,_
+	xor (hl)
+	ld (hl),a
+	ld a,l
+_
+	dec l
+	or (hl)
+	ld (hl),a
+	jr nz,waitloop_end
+	ld a,d
+	ld hl,(loop_negptr)
+	add hl,de
+	ld de,(loop_size)
+	add hl,de
+	jr nc,waitloop_end
+	add a,$40 ;Is PC in swappable ROM?
+	jp po,_
+	ld a,(loop_page)
+	cp (ix-vars+pageA)
+	jr nz,waitloop_end
+_
+	ld hl,LYC
+	ld a,(hl)
+	dec a
+	dec l
+	cp 143
+	jr nc,_
+	cp (hl)
+	jr nc,++_
+_
+	ld a,143
+_
+	ld (hl),a
+waitloop_end:
+	
+#comment
+	ld a,(lcdchanged)
+	or a
+	jr nz,no_loop_check
+	ld a,(hl)
+	cp $76
+	jr z,_
+	ld de,(last_loop)
+	ld (last_loop),hl
+	sbc hl,de
+	ld a,h
+	rlca
+	cp h
+	jr nz,++_
+	xor l
+	cp LOOP_MAX_SIZE
+	jr nc,++_
+	ld a,(loop_analyzed)
+	or a
+	push iy
+	call z,check_loop
+	pop iy
+	jr +++_
+_
+	ld hl,LY
+	ld a,(hl)
+	cp 143
+	call c,loop_found_end
+_
+	xor a
+	ld (loop_analyzed),a
+_
+no_loop_check:
+#endcomment
+	
+#comment
+	ld hl,$FF03
+	ld a,(hl)
+	or a
+	jr z,notsending
+	dec (hl)
+	jr nz,serialend
+	dec l
+	res 7,(hl)
+	ld l,$0F
+	set 3,(hl)
+	jr serialassistoff
+notsending:
+	dec l
+	bit 7,(hl)
+	jr z,serialoff
+	bit 0,(hl)
+	dec hl
+	jr z,slave
+	xor a
+	out (0),a
+	in a,(0)
+	rra
+	sbc a,a
+	jr c,received
+	ld a,2
+	out (0),a
+_
+	in a,(0)
+	rra
+	jr nc,-_
+	xor a
+	out (0),a
+	jr send
+slave:
+	ld a,1
+	out (0),a
+	in a,(0)
+	and 2
+	jr nz,serialend
+	out (0),a
+_
+	in a,(0)
+	sub 3
+	jr nz,-_
+send:
+	out (8),a
+	ld a,(hl)
+	out ($0D),a
+_
+	in a,(9)
+	bit 6,a
+	jr nz,++_
+	bit 4,a
+	jr z,-_
+_
+	in a,(9)
+	rla
+	jr c,-_
+_
+	in a,($0A)
+received:
+	ld (hl),a
+	ld l,3
+	ld (hl),8
+serialassistoff:
+	ld a,$80
+	out (8),a
+serialoff:
+	xor a
+	out (0),a
+serialend:
+#endcomment
+	
+#comment
+	ld hl,$FF03
+	ld a,(hl)
+	or a
+	jr z,notsending
+	dec (hl)
+	jr nz,serialend
+	dec l
+	bit 0,(hl)
+	jr z,slaveeee
+	xor a
+	out (0),a
+	in a,(0)
+	rra
+	sbc a,a
+	jr c,received
+_
+	in a,(0)
+	rra
+	jr nc,-_
+	xor a
+send:
+	out (8),a
+	dec l
+	ld a,(hl)
+	out ($0D),a
+_
+	in a,(9)
+	bit 6,a
+	jr nz,received
+	bit 4,a
+	jr z,-_
+_
+	in a,(9)
+	rla
+	jr c,-_
+received:
+	res 7,(hl)
+	dec l
+	ld (hl),a
+	ld l,$0F
+	set 3,(hl)
+	jr serialassistoff
+slaveeee:
+	in a,(0)
+	and 2
+	jr z,slaveeee
+	xor a
+	out (0),a
+	jr send
+notsending:
+	dec l
+	bit 7,(hl)
+	jr z,serialoff
+	bit 0,(hl)
+	jr z,slave
+	ld a,2
+	out (0),a
+	inc l
+	ld (hl),8
+	jr serialend
+slave:
+	in a,(0)
+	and 2
+	jr nz,serialend
+	inc a
+	out (0),a
+	inc l
+	ld (hl),8
+	jr serialend
+serialassistoff:
+	ld a,$80
+	out (8),a
+serialoff:
+	xor a
+	out (0),a
+serialend:
+#endcomment
+	
+	ld hl,DIV
+	ld a,r
+	add a,(hl)
+	ld (hl),a
+	
+	ld a,(TAC)
+	bit 2,a
+	jr z,_
+	dec a
+	and 3
+	srl a
+	jr nz,$+4 \ ld a,16
+	jr c,$+4 \ add a,a \ add a,a
+	;add a,a
+	inc l ;ld l,TIMA & $FF
+	add a,(hl)
+	ld (hl),a
+	jr nc,_
+	ld a,(TMA)
+	ld (hl),a
+	ld l,IF & $FF
+	set 2,(hl)
+_
+	
+	ld a,(STAT)
+	and %00101000
+	jr z,_
+	ld l,IF & $FF
+	set 1,(hl)
+_
+	
+	ld l,LCDC & $FF
+	bit 7,(hl)
+	ld l,LY & $FF
+	jr z,_
+	ld a,(hl)
+	inc a
+	cp 154
+	jr c,++_
+_
+	xor a
+_
+	ld (hl),a
+	inc l
+	cp (hl)
+	ld l,STAT & $FF
+	res 2,(hl)
+	jr nz,not_lyc
+	set 2,(hl)
+	bit 6,(hl)
+	jr z,not_lyc
+	ld l,$0f
+	set 1,(hl)
+not_lyc:
+	
+	cp 144
+	jr z,vblank
+	jr nc,backup
+	ld a,(lcdchanged)
+	or a
+	jr z,check_vblank
+vblank:
+	call render
+	xor a
+backup:
+	ld (lcdchanged),a
+	ld hl,LCDC
+	ld de,LCDC_backup
+	ld bc,12
+	ldir
+check_vblank:
+	ld a,(LCDC)
+	or (ix-vars+sprite_detect)
+	ld (sprite_detect),a
+	
+	ld l,STAT & $FF
+	ld a,(LY)
+	or a
+	jr nz,_
+	res 0,(hl)
+_
+	cp 144
+	jr c,_
+	set 0,(hl)
+	res 1,(hl)
+_
+	jr nz,no_lcd_update
+	bit 4,(hl)
+	ld l,IF & $FF
+	set 0,(hl)
+	jr z,no_lcd_update
+	set 1,(hl)
+no_lcd_update:
+	ld de,(opcodetable_B & $FF00) + (opcodetable >> 8)
+	ret
+	
+timer1flash:
+	push bc
+	push de
+	push hl
+	ld a,2
+	out ($31),a
+	ld d,0
+	in a,($32)
+	ld e,a
+	inc de
+	inc de
+	inc de
+	ld hl,(chan3cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 2,(hl)
+	jr z,_
+	ld a,(NR32)
+	and %01100000
+	jr z,_
+	ld l,soundOutputs+1 & $FF
+	ld a,(hl)
+	xor 2
+	ld (hl),a
+_
+	ld hl,(chan3div)
+	bit 1,a
+	jr z,$+3
+	inc hl
+	res 0,l
+_
+	ld (chan3cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	ld b,a
+	
+	ld hl,(chan4cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 3,(hl)
+	jr z,_
+	ld l,soundOutputs & $FF
+	ld a,r
+	xor (hl)
+	and 1
+	xor (hl)
+	ld (hl),a
+_
+	ld hl,(chan4div)
+_
+	ld (chan4cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	cp b
+	jr c,_
+	ld a,b
+_
+	out ($32),a
+	
+	ld hl,(soundOutputs)
+	ld a,h
+	xor l
+	ld (soundDiff1),a
+	ld (soundDiff2),a
+	ex af,af'
+	rla
+	ld a,l
+	jr nc,$+3
+	ld a,h
+	ex af,af'
+	
+	pop hl
+	pop de
+	pop bc
+	pop af
+	ei
+	ret
+	
+timer2flash:
+	push bc
+	push de
+	push hl
+	ld a,2
+	out ($34),a
+	ld d,0
+	in a,($35)
+	ld e,a
+	inc de
+	inc de
+	inc de
+	ld hl,(chan1cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 0,(hl)
+	jr z,_
+	ld l,soundOutputs & $FF
+	ld a,(hl)
+	xor 2
+	ld (hl),a
+	bit 1,a
+	ld hl,(chan1div1)
+	jr nz,++_
+_
+	ld hl,(chan1div0)
+_
+	ld (chan1cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	ld b,a
+	
+	ld hl,(chan2cnt)
+	add hl,de
+	jr nc,++_
+	ld hl,NR52_backup
+	bit 1,(hl)
+	jr z,_
+	ld l,soundOutputs+1 & $FF
+	ld a,(hl)
+	xor 1
+	ld (hl),a
+	rra
+	ld hl,(chan2div1)
+	jr c,++_
+_
+	ld hl,(chan2div0)
+_
+	ld (chan2cnt),hl
+	
+	ld a,$FF
+	cp h
+	jr nz,_
+	xor l
+_
+	cp b
+	jr c,_
+	ld a,b
+_
+	out ($35),a
+	
+	ld hl,(soundOutputs)
+	ld a,h
+	xor l
+	ld (soundDiff1),a
+	ld (soundDiff2),a
+	ex af,af'
+	rla
+	ld a,l
+	jr nc,$+3
+	ld a,h
+	ex af,af'
+	
+	pop hl
+	pop de
+	pop bc
+	pop af
+	ei
+	ret
+	
+#comment
+sndflash_chan3:
+	ld l,chan3cntMSB & $FF
+	inc (hl)
+	jr nz,sndflash_chan3end
+	ld l,linestate0 & $FF
+	bit 1,(hl)
+	jr z,_
+	res 1,(hl)
+	ld hl,(chan3div1)
+	jr ++_
+_
+	set 1,(hl)
+	ld hl,(chan3div2)
+_
+	ld a,h
+	ld (chan3cntMSB),a
+	ld a,l
+	ld hl,chan3cntLSB
+	ld (hl),a
+sndflash_chan3end:
+	ld l,chan3cntLSB+1 & $FF
+	jr sndflash_chan3continue
+	
+sndflash_intense:
+	ld a,3
+	out ($34),a
+	push hl
+	ld hl,chan1cntLSB
+	inc (hl)
+	jr z,sndflash_chan1
+	inc l
+sndflash_chan1continue:
+	inc (hl)
+	jr z,sndflash_chan2
+	inc l
+sndflash_chan2continue:
+	inc (hl)
+	jr z,sndflash_chan3
+	inc l
+sndflash_chan3continue:
+	ld a,r
+	add a,$80
+	ld r,a
+	jr nc,$+3
+	inc l
+	ld a,(hl)
+	out (0),a
+	pop hl
+	pop af
+	ei
+	ret
+	
+sndflash_chan1:
+	ld l,chan1cntMSB & $FF
+	inc (hl)
+	jr nz,sndflash_chan1end
+	ld l,linestate0 & $FF
+	bit 0,(hl)
+	jr z,_
+	res 0,(hl)
+	ld hl,(chan1div1)
+	jr ++_
+_
+	set 0,(hl)
+	ld hl,(chan1div2)
+_
+	ld a,h
+	ld (chan1cntMSB),a
+	ld a,l
+	ld hl,chan1cntLSB
+	ld (hl),a
+sndflash_chan1end:
+	ld l,chan1cntLSB+1 & $FF
+	jr sndflash_chan1continue
+	
+	
+sndflash_chan2:
+	ld l,chan2cntMSB & $FF
+	inc (hl)
+	jr nz,sndflash_chan2end
+	ld l,linestate1 & $FF
+	ld a,(hl)
+	xor 3
+	ld (hl),a
+	jr z,_
+	ld hl,(chan2div1)
+	jr ++_
+_
+	ld hl,(chan2div2)
+_
+	ld a,h
+	ld (chan2cntMSB),a
+	ld a,l
+	ld hl,chan2cntLSB
+	ld (hl),a
+sndflash_chan2end:
+	ld l,chan2cntLSB+1 & $FF
+	jr sndflash_chan2continue
+	
+swaplinesflash:
+	push hl
+	bit 4,a
+	ld a,2
+	jr nz,swapline1flash
+swapline2flash:
+	out ($34),a
+	ld hl,(NR23)
+	ld a,h
+	xor l
+	and 3
+	xor l
+	rrca
+	rrca
+	bit 2,h
+	jr nz,$+3
+	xor a
+	xor $FF
+	jr nz,$+3
+	inc a
+	out ($35),a
+	ld hl,linestate
+	ld a,(hl)
+	xor 2
+	ld (hl),a
+	out (0),a
+	pop hl
+	pop af
+	ei
+	ret
+swapline1flash:
+	out ($31),a
+	ld hl,(NR33)
+	ld a,h
+	xor l
+	and 3
+	xor l
+	rrca
+	rrca
+	bit 2,h
+	jr nz,$+3
+	xor a
+	xor $FF
+	jr nz,$+3
+	inc a
+	out ($32),a
+	ld a,(NR30)
+	rla
+	jr nc,_
+	ld a,(NR32)
+	and %01100000
+	jr z,_
+	ld hl,linestate
+	ld a,(hl)
+	xor 1
+	ld (hl),a
+	out (0),a
+_
+	pop hl
+	pop af
+	ei
+	ret
+#endcomment
+	
+go_sleep_sound:
+	di
+	ld hl,irq_jump
+	ld (hl),$C9
+	xor a
+	out ($31),a
+	out ($34),a
+	out ($37),a
+	inc a
+	out (3),a
+	ei
+	halt
+	ld a,3
+	out ($10),a
+_
+	ld bc,0
+_
+	ex (sp),hl
+	ex (sp),hl
+	ex (sp),hl
+	ex (sp),hl
+	in a,(4)
+	bit 3,a
+	jr z,--_
+	dec bc
+	ld a,b
+	or c
+	jr nz,-_
+	ld (hl),$C3
+	out (3),a
+	ld a,5
+	out (3),a
+	ld a,2
+	out ($31),a
+	out ($34),a
+	dec a
+	out ($32),a
+	out ($35),a
+	ld a,$FF
+	out ($37),a
+	out ($38),a
+	ei
+	ret
+	
+go_sleep:
+	ld a,(channelSelect)
+	or a
+	jr nz,go_sleep_sound
+	ld hl,irq_jump
+	ld (hl),$C9
+	xor a
+	out ($37),a
+	ei
+	halt
+	ld a,3
+	out ($10),a
+_
+	ld bc,0
+_
+	ex (sp),hl
+	ex (sp),hl
+	ex (sp),hl
+	ex (sp),hl
+	in a,(4)
+	bit 3,a
+	jr z,--_
+	dec bc
+	ld a,b
+	or c
+	jr nz,-_
+	ld (hl),$C3
+	out (3),a
+	inc a
+	out (3),a
+	ret
+	
+#include "render.z80"
+	
+rompage3codesize = $ - $4000
+	.echo "ROM Page 3 code size: ",rompage3codesize
+	.echo "Left on ROM Page 3: ", $5A00 - $
+	.org rompage3code + rompage3codesize

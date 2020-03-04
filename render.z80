@@ -1,0 +1,2767 @@
+	;Display flags
+	;  Bits 6-7: zoom mode
+	;  Bit 0: grayscale enable
+	;  Bits 1-2: monochrome palette select
+	
+render:
+	ld a,$FF
+	out (1),a
+	ld a,$BF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	rla
+	jr c,_
+	ld a,3
+	ld (framecount),a
+_
+	
+	ld a,(LY)
+	cp 144
+	jr z,_
+	ld a,(framecount)
+	dec a
+	ret nz
+	ld a,(LY)
+	or a
+	jr nz,++_
+	
+	ld hl,(offsetYFake)
+	ld (offsetY),hl
+	ld a,l
+	ld (myLY),a
+	
+	ld hl,displayFlagsFake
+	ld b,(hl)
+	dec l
+	ld a,(hl)
+	ld (hl),b
+	xor b
+	and %11000001
+	call nz,update_zoom_vars
+	xor a
+	out (5),a
+	jr ++_
+	
+_
+	call getAllMyKeys
+	ld hl,framecount
+	dec (hl)
+	jp nz,intermediateFrame
+	ld a,(frameskip)
+	ld (hl),a
+_
+	
+	ld a,(LCDC_backup)
+	rla
+	ret nc
+	
+	exx
+	push bc
+	push de
+	push hl
+	ld a,2
+	out (5),a
+	
+start_raster:
+	ld a,(LCDC_backup)
+	rra
+	jp nc,clip_bottom
+	
+	ld a,(LY)
+	cp (ix-vars+myLY)
+	jp c,clip_top
+	
+	ld a,(windowLine)
+	or a
+	jr nz,_
+	bit 5,(ix-vars+LCDC_backup)
+	jr z,_
+	ld a,(myLY)
+	sub (ix-vars+WY_backup)
+	jr c,_
+	ld (windowLine),a
+_
+	
+	ld hl,(SCY_backup)
+	ld a,(offsetX)
+	add a,h
+	ld h,a
+	ld (mySCY),hl
+	
+	call preparetilemap
+	jr nc,clip_bottom
+	
+	ld a,(LCDC_backup)
+	bit 3,a
+	jr z,_
+	set 2,d
+_
+	bit 4,a
+	ld a,$24	;inc h
+	jr nz,$+3
+	inc a	;dec h
+	ld (rastersmc1),a
+	
+	exx
+	ld b,(ix-vars+screenWidth)
+	
+	;Is window on?
+	bit 5,(ix-vars+LCDC_backup)
+	jr z,raster_no_window
+	;Is window Y below the last LY?
+	ld a,(myLY)
+	sub (ix-vars+WY_backup)
+	jr nc,_
+	;Does window start in the current slice?
+	exx
+	add a,c
+	exx
+	jr nc,raster_no_window
+	exx
+	sbc a,c ;CARRY WAS SET
+	cpl
+	ld c,a
+	add a,(ix-vars+myLY)
+	ld (myLY),a
+	
+	call rasterlines
+	jr start_raster
+	
+_
+	;Make it draw only as far as the window (or the screen width, whichever is less).
+	ld a,(WX_backup)
+	sub (ix-vars+offsetX)
+	jr c,raster_window
+	
+	rra
+	rra
+	rra
+	and $1F
+	cp b
+	jr nc,raster_no_window
+	
+	ld b,a
+	inc b
+	exx
+	
+	call rasterlines
+	
+raster_window:
+	call preparewindow
+	jr nc,clip_bottom
+	
+	ld a,(LCDC_backup)
+	bit 6,a
+	jr z,_
+	set 2,d
+_
+	bit 4,a
+	ld a,$24	;inc h
+	jr nz,$+3
+	inc a	;dec h
+	ld (rastersmc1),a
+	
+	call rasterlines
+	jr clip_bottom
+	
+raster_no_window:
+	exx
+	
+	call rasterlines
+	
+clip_bottom:
+	ld a,(LY)
+	ld (myLY),a
+	cp 144
+	jr nz,clip_top
+	push iy
+	call draw_sprites
+	pop iy
+	call screenCopy
+	xor a
+	ld (windowLine),a
+clip_top:
+	pop hl
+	pop de
+	pop bc
+	exx
+	xor a
+	out (5),a
+	ret
+	
+safecopy_mono_0:
+	ld hl,bufferBase
+	ld e,$20
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,e
+	out ($10),a
+	ld bc,64*256+$11
+_
+	in a,($10)
+	rla
+	jr c,-_
+	outi
+	jr nz,-_
+	ld c,15
+	add hl,bc
+	inc e
+	ld a,e
+	cp $2c
+	jr nz,--_
+safecopy_mono_0_intermediate:
+	ret
+	
+safecopy_gray_0_intermediate:
+	bit 0,(hl)
+	ret nz
+	ld a,2
+	out (5),a
+	call safecopy_gray_0
+	xor a
+	out (5),a
+	ret
+	
+safecopy_gray_0:
+	ld hl,dithercount
+	dec (hl)
+	jr nz,_
+	ld (hl),3
+_
+	ld bc,30
+	ld hl,bufferBase - 30
+	ld e,$1F
+	call advancecolumn
+	
+	ld a,(dithercount)
+	dec a
+	jr z,gray0loop3
+	dec a
+	jr z,gray0loop2
+	
+gray0loop1:
+	in a,($10)
+	rla
+	jr c,gray0loop1
+	
+	ld a,(hl)
+	inc l
+	xor (hl)
+	and %10110110
+	xor (hl)
+	inc hl
+	out ($11),a
+	
+	dec b
+	call z,advancecolumn
+	
+gray0loop2:
+	in a,($10)
+	rla
+	jr c,gray0loop2
+	
+	ld a,(hl)
+	inc l
+	xor (hl)
+	and %11011011
+	xor (hl)
+	inc hl
+	out ($11),a
+	
+	dec b
+	call z,advancecolumn
+	
+gray0loop3:
+	in a,($10)
+	rla
+	jr c,gray0loop3
+	
+	ld a,(hl)
+	inc l
+	xor (hl)
+	and %01101101
+	xor (hl)
+	inc hl
+	out ($11),a
+	
+	dec b
+	call z,advancecolumn
+	jp gray0loop1
+
+advancecolumn:
+	add hl,bc
+	ld b,64
+	inc e
+	ld a,e
+	cp $2c
+	jr z,++_
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,e
+	out ($10),a
+	ret
+_
+	pop hl
+	ret
+	
+safecopy_mono_1_intermediate:
+	ld a,2
+	out (5),a
+	call safecopy_mono_1
+	xor a
+	out (5),a
+	ret
+	
+safecopy_mono_1:
+	push ix
+	ld hl,dithercount
+	dec (hl)
+	ld a,(hl)
+	jr nz,_
+	ld (hl),6
+_
+	srl a
+	inc a
+	ld ixh,a
+	ld d,bit6LUT0 >> 8
+	jr nc,_
+	inc d
+_
+	ld hl,bufferBase
+	ld c,$20
+mono1loop0:
+	push hl
+	push ix
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	ld b,64
+mono1loop1:
+	ld e,(hl)
+	inc hl
+	dec ixh
+	jr nz,_
+	ld ixh,3
+	inc hl
+_
+	ld a,d
+	xor (bit6LUT0^bit6LUT1)>>8
+	ld d,a
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,(de)
+	out ($11),a
+	djnz mono1loop1
+	ld a,c
+	pop ix
+	pop hl
+	ld c,86 + 15
+	add hl,bc
+	inc a
+	ld c,a
+	cp $30
+	jr nz,mono1loop0
+	pop ix
+	ret
+	
+safecopy_gray_1_intermediate:
+	bit 0,(hl)
+	ret nz
+	ld a,2
+	out (5),a
+	call safecopy_gray_1
+	xor a
+	out (5),a
+	ret
+	
+safecopy_gray_1:
+	push ix
+	ld hl,dithercount
+	dec (hl)
+	jr nz,_
+	ld (hl),3
+_
+	ld a,(hl)
+	
+	ld hl,bufferBase - ((86+15)*2)
+	push hl
+	ld c,$1F
+	ld d,bit6LUT0 >> 8
+	
+	dec a
+	ld ix,gray1loop3
+	jr z,advancecolumn1
+	
+	dec a
+	ld ix,gray1loop2
+	jr z,advancecolumn1
+	
+	ld ix,gray1loop1
+	
+advancecolumn1:
+	pop hl
+	ld a,c
+	inc a
+	ld bc,(86+15)*2
+	add hl,bc
+	ld c,a
+	ld b,64
+	cp $30
+	jr z,++_
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	push hl
+	jp (ix)
+_
+	pop ix
+	ret
+	
+gray1loop1:
+	in a,($10)
+	rla
+	jr c,gray1loop1
+	
+	ld a,(hl)
+	inc l
+	xor (hl)
+	and %10011001
+	xor (hl)
+	ld e,a
+	ld a,(de)
+	inc hl
+	out ($11),a
+	inc l
+	inc hl
+	
+	dec b
+	jp z,advancecolumn1
+	
+gray1loop2:
+	in a,($10)
+	rla
+	jr c,gray1loop2
+	
+	ld a,(hl)
+	inc l
+	xor (hl)
+	and %10101010
+	xor (hl)
+	ld e,a
+	ld a,(de)
+	inc hl
+	out ($11),a
+	
+	dec b
+	jp z,advancecolumn1
+	
+gray1loop3:
+	in a,($10)
+	rla
+	jr c,gray1loop3
+	
+	ld a,(hl)
+	inc l
+	xor (hl)
+	and %00110011
+	xor (hl)
+	ld e,a
+	ld a,(de)
+	inc hl
+	out ($11),a
+	
+	dec b
+	jp z,advancecolumn1
+	jp gray1loop1
+	
+safecopy_mono_2_intermediate:
+	;bit 0,(hl)
+	;ret nz
+	ld a,2
+	out (5),a
+	call safecopy_mono_2
+	xor a
+	out (5),a
+	ret
+	
+safecopy_mono_2:
+	push ix
+	push iy
+	
+	ld hl,dithercount
+	dec (hl)
+	ld a,(hl)
+	jr nz,_
+	ld (hl),6
+_
+	srl a
+	ld h,bit5LUT0 >> 8
+	jr nc,_
+	inc h
+_
+	inc a
+	ld iyl,a
+	ld ix,bufferBase
+	ld bc,64*256 + $20
+	
+mono2loop0:
+	push bc
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	
+	ld iyh,iyl
+	push ix
+mono2loop1:
+	ld a,h
+	xor (bit5LUT0^bit5LUT1)>>8
+	ld h,a
+	ld l,(ix)
+	ld a,(hl)
+	add a,a
+	add a,a
+	add a,a
+	ld c,a
+	ld l,(ix+107+15)
+	ld a,(hl)
+	rra
+	srl a
+	or c
+	ld c,a
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($11),a
+	inc ix
+	inc ix
+	dec iyh
+	jr nz,_
+	ld iyh,3
+	dec ix
+_
+	djnz mono2loop1
+	
+	pop ix
+	ld de,(107+15)*2
+	add ix,de
+	
+	pop bc
+	inc c
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	push bc
+	push ix
+	ld iyh,iyl
+mono2loop2:
+	ld a,h
+	xor (bit5LUT0^bit5LUT1)>>8
+	ld h,a
+	add a,(bit4LUT0-bit5LUT0)>>8
+	ld d,a
+	ld l,(ix-107-15)
+	ld a,(hl)
+	rrca
+	rrca
+	and %11000000
+	ld c,a
+	ld l,(ix+107+15)
+	ld a,(hl)
+	rrca
+	rrca
+	rrca
+	and %00000011
+	or c
+	ld c,a
+	ld e,(ix)
+	ld a,(de)
+	add a,a
+	add a,a
+	or c
+	ld c,a
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($11),a
+	inc ix
+	inc ix
+	dec iyh
+	jr nz,_
+	ld iyh,3
+	dec ix
+_
+	djnz mono2loop2
+	
+	pop ix
+	ld de,(107+15)*2
+	add ix,de
+	
+	pop bc
+	inc c
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	push bc
+	push ix
+	ld iyh,iyl
+mono2loop3:
+	ld a,h
+	xor (bit5LUT0^bit5LUT1)>>8
+	ld h,a
+	ld l,(ix-107-15)
+	ld a,(hl)
+	rrca
+	rrca
+	rrca
+	and %11100000
+	ld l,(ix)
+	or (hl)
+	ld c,a
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($11),a
+	inc ix
+	inc ix
+	dec iyh
+	jr nz,_
+	ld iyh,3
+	dec ix
+_
+	djnz mono2loop3
+	
+	pop ix
+	ld de,107+15
+	add ix,de
+	
+	pop bc
+	inc c
+	ld a,c
+	cp $2c
+	jp nz,mono2loop0
+	
+	pop iy
+	pop ix
+	ret
+	
+safecopy_gray_2_intermediate:
+	bit 0,(hl)
+	ret nz
+	ld a,2
+	out (5),a
+	call safecopy_gray_2
+	xor a
+	out (5),a
+	ret
+	
+safecopy_gray_2:
+	push ix
+	
+	ld a,7
+	out ($10),a
+	
+	ld hl,dithercount
+	dec (hl)
+	ld a,(hl)
+	jr nz,_
+	ld (hl),3
+_
+	cpl
+	ld ixl,a
+	ld ixh,(graydithers >> 8) - 1
+	ld d,bit5LUT0 >> 8
+	ld hl,bufferBase
+	ld c,$80
+	
+gray2loop0:
+	push af
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,c
+	out ($10),a
+	
+	push hl
+	ld b,4
+	inc c
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,$20
+	out ($10),a
+	
+gray2loop1:
+	push bc
+	ld a,(hl)
+	inc l
+	xor (hl)
+	;Scaler pulls from *_*_**_*
+	and (ix-5)
+	xor (hl)
+	ld e,a
+	ld a,(de)
+	add a,a
+	add a,a
+	add a,a
+	ld bc,(107+15)*2-1
+	add hl,bc
+	ld c,a
+	ld a,(hl)
+	inc l
+	xor (hl)
+	;Scaler pulls from *_*_**_*
+	and (ix-4)
+	xor (hl)
+	ld e,a
+	ld a,(de)
+	rrca
+	rrca
+	ld e,a
+	and 7
+	or c
+	out ($11),a
+	ld bc,(107+15)*2-1
+	add hl,bc
+	ld a,(hl)
+	inc l
+	xor (hl)
+	;Scaler pulls from _*_*_*_*
+	and (ix)
+	xor (hl)
+	ld b,bit4LUT0 >> 8
+	ld c,a
+	ld a,(bc)
+	add a,a
+	add a,a
+	xor e
+	and %00111111
+	xor e
+	ld bc,(107+15)*2-1
+	add hl,bc
+	ld c,a
+	ld a,(hl)
+	inc l
+	xor (hl)
+	;Scaler pulls from *_*_**_*
+	and (ix-4)
+	xor (hl)
+	ld e,a
+	ld a,(de)
+	rrca
+	rrca
+	rrca
+	ld e,a
+	and 3
+	or c
+	out ($11),a
+	ld bc,(107+15)*2-1
+	add hl,bc
+	ld a,(hl)
+	inc l
+	xor (hl)
+	;Scaler pulls from *_*_**_*
+	and (ix-3)
+	xor (hl)
+	ld b,d
+	ld c,a
+	ld a,(bc)
+	xor e
+	and $1f
+	xor e
+	ld bc,(107+15)*2-1
+	add hl,bc
+	pop bc
+	ld e,a
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,e
+	out ($11),a
+	djnz gray2loop1
+	pop hl
+	pop af
+	
+	inc ixl
+	jr nz,_
+	ld ixl,-3
+_
+	
+	cp ixl
+	jr z,_
+	inc l
+	inc hl
+_
+	inc l
+	inc hl
+	
+	bit 6,c
+	jp z,gray2loop0
+	
+	pop ix
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,5
+	out ($10),a
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,$80
+	out ($10),a
+	ret
+	
+	
+safecopy_mono_3_intermediate:
+	ld a,2
+	out (5),a
+	call safecopy_mono_3
+	xor a
+	out (5),a
+	ret
+	
+safecopy_mono_3:
+	ld hl,dithercount
+	dec (hl)
+	ld a,(hl)
+	jr nz,_
+	ld (hl),4
+_
+	ld d,bufferBase >> 8
+	ld e,a
+	srl e
+	and 1
+	add a,bit4LUT0 >> 8
+	ld c,a
+	ld a,$21
+	out ($10),a
+_
+	push de
+	push af
+	ld b,64
+_
+	ld a,c
+	xor 1
+	ld c,a
+	ld a,(de)
+	ld l,a
+	ld h,c
+	ld a,(hl)
+	add a,a
+	add a,a
+	add a,a
+	add a,a
+	ld hl,(bufferHeight)
+	add hl,de
+	ld l,(hl)
+	ld h,c
+	add a,(hl)
+	inc de
+	inc de
+	ld l,a
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,l
+	out ($11),a
+	djnz --_
+_
+	in a,($10)
+	rla
+	jr c,-_
+	pop af
+	inc a
+	out ($10),a
+	ld hl,(bufferHeight)
+	add hl,hl
+	pop de
+	add hl,de
+	ex de,hl
+	cp $2b
+	jr nz,----_
+	ret
+	
+safecopy_gray_3_intermediate:
+	bit 0,(hl)
+	ret nz
+	ld a,2
+	out (5),a
+	exx
+	push hl
+	exx
+	call safecopy_gray_3
+	exx
+	pop hl
+	exx
+	xor a
+	out (5),a
+	ret
+	
+safecopy_gray_3:
+	ld hl,dithercount
+	dec (hl)
+	jr nz,_
+	ld (hl),6
+_
+	ld a,(hl)
+	cp 4
+	jr c,_
+	sub 3
+_
+	exx
+	ld h,graydithers >> 8
+	ld l,a
+	exx
+	ld de,bufferBase
+	ld a,e
+	jr nc,_
+	ld e,2
+_
+	adc a,bit4LUT0 >> 8
+	ld c,a
+	ld a,$21
+	out ($10),a
+gray3loop0:
+	push de
+	push af
+	ld b,64
+gray3loop1:
+	ld a,(de)
+	ld l,a
+	ld h,c
+	ld a,(hl)
+	add a,a
+	add a,a
+	add a,a
+	add a,a
+	ld hl,(bufferHeight)
+	add hl,de
+	ld l,(hl)
+	ld h,c
+	add a,(hl)
+	push af
+	
+	inc e
+	ld a,(de)
+	ld l,a
+	ld h,c
+	ld a,(hl)
+	add a,a
+	add a,a
+	add a,a
+	add a,a
+	ld hl,(bufferHeight)
+	add hl,de
+	ld l,(hl)
+	ld h,c
+	add a,(hl)
+	ld l,a
+	pop af
+	
+	xor l
+	exx
+	and (hl)
+	dec l
+	jr nz,$+4
+	ld l,3
+	exx
+	xor l
+	
+	inc de
+	inc e
+	inc de
+	out ($11),a
+	djnz gray3loop1
+_
+	in a,($10)
+	rla
+	jr c,-_
+	pop af
+	inc a
+	out ($10),a
+	ld hl,(bufferHeight)
+	add hl,hl
+	pop de
+	add hl,de
+	ex de,hl
+	cp $2b
+	jr nz,gray3loop0
+	ret
+	
+clear_screen_edges:
+	in a,($10)
+	rla
+	jr c,clear_screen_edges
+	ld a,$80
+	out ($10),a
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,$20
+	out ($10),a
+	
+	ld b,64
+_
+	in a,($10)
+	rla
+	jr c,-_
+	xor a
+	out ($11),a
+	djnz -_
+	
+_
+	in a,($10)
+	rla
+	jr c,-_
+	ld a,$2B
+	out ($10),a
+	
+	ld b,64
+_
+	in a,($10)
+	rla
+	jr c,-_
+	xor a
+	out ($11),a
+	djnz -_
+	
+	ret
+	
+rastercolumnend:
+	exx
+	pop de
+	dec b
+	exx
+	pop hl
+	pop bc
+	ret z
+	inc l
+	ld a,l
+	and $1f
+	jp nz,rasterloop0
+	ld a,l
+	sub $20
+	ld l,a
+	jp rasterloop0
+	
+preparewindow:
+	;Generate the optimized rastering code
+	ld a,(WX_backup)
+	sub (ix-vars+offsetX)
+	cpl
+	ld e,a
+	push af
+	call prepareraster
+	
+	;Get the drawing mask
+	pop af
+	and 7
+	ld b,a
+	ld a,$ff
+	jr z,++_
+_
+	add a,a
+	djnz -_
+_
+	cpl
+	exx
+	ld c,a
+	exx
+	
+	ld a,(windowLine)
+	ld l,a
+	;Put the tile row in B
+	and 7
+	ld b,a
+	
+	;Get the pointer to the start of row in DE
+	xor l
+	ld d,$98 >> 2
+	add a,a
+	rl d
+	add a,a
+	rl d
+	ld e,a
+	
+	;Add the number of lines displayed to the windowLine counter
+	ld a,(LY)
+	sub (ix-vars+myLY)
+	add a,l
+	ld (windowLine),a
+	
+	;Clip, or else get the row to display on and return the pointer in DE and rows to draw in C
+	ld a,(screenheight)
+	add a,(ix-vars+offsetY)
+	ld c,a
+	ld a,(myLY)
+	ld h,a
+	sub c
+	ret nc
+	add a,(ix-vars+screenHeight)
+	ld l,a
+	ld a,(LY)
+	cp c
+	jr c,_
+	ld a,c
+_
+	sub h
+	ret z
+	ld c,a
+	ld a,(displayFlags)
+	rra
+	ld a,l
+	exx
+	ld h,bufferBase >> 8
+	jr nc,_
+	add a,a
+	jr nc,_
+	inc h
+	or a
+_
+	ld l,a
+	ld de,(bufferHeight)
+	sbc hl,de
+	
+	;Now get the window X offset (slightly complicated by the fact that the view window can be scrolled)
+	ld b,(ix-vars+screenWidth)
+	ld a,(WX_backup)
+	sub (ix-vars+offsetX)
+	jr c,shift_window
+	;If the offset is positive, then we just add an offset times the bufferHeight to DE. Also get the display width in B.
+	sub 8
+	jr c,++_
+_
+	add hl,de
+	dec b
+	ret z
+	sub 8
+	jr nc,-_
+_
+	ex de,hl
+	exx
+	ret
+	
+shift_window:
+	;If the window starts to the left of the screen, we add an offset to the starting tile.
+	ex de,hl
+	cpl
+	rra
+	rra
+	rra
+	and $1F
+	inc a
+	exx
+	add a,e
+	ld e,a
+	jr nc,_
+	inc d
+_
+	scf
+	ret
+	
+	
+preparetilemap:
+	;Generate the optimized rastering code
+	ld e,(ix-vars+mySCX)
+	call prepareraster
+	
+	;Get the drawing mask
+	ld hl,(mySCY)
+	ld a,h
+	and 7
+	ld b,a
+	ld a,$ff
+	jr z,++_
+_
+	add a,a
+	djnz -_
+_
+	cpl
+	exx
+	ld c,a
+	exx
+	
+	;Divide X position by 8
+	srl h
+	srl h
+	srl h
+	;Add the line number to the Y position
+	ld a,(myLY)
+	add a,l
+	ld l,a
+	;Put the tile row in B
+	and 7
+	ld b,a
+	
+	;Get the tile pointer in DE
+	xor l
+	ld d,$98 >> 2
+	add a,a
+	rl d
+	add a,a
+	rl d
+	add a,h
+	ld e,a
+	
+	;Clip, or else get the row to display on and return the pointer in DE and rows to draw in C
+	ld a,(screenheight)
+	add a,(ix-vars+offsetY)
+	ld c,a
+	ld a,(myLY)
+	ld h,a
+	sub c
+	ret nc
+	add a,(ix-vars+screenHeight)
+	ld l,a
+	ld a,(LY)
+	cp c
+	jr c,_
+	ld a,c
+_
+	sub h
+	ret z
+	ld c,a
+	ld a,(displayFlags)
+	rra
+	ld a,l
+	exx
+	ld h,bufferBase >> 8
+	jr nc,_
+	add a,a
+	jr nc,_
+	inc h
+	or a
+_
+	ld l,a
+	ld de,(bufferHeight)
+	sbc hl,de
+	ex de,hl
+	exx
+	scf
+	ret
+	
+	
+	;Input: E = x position of tilemap (for rotation mod)
+prepareraster:
+	ld a,(BGP_backup)
+	ld l,a
+	bit 1,(ix-vars+displayFlags)
+	jr z,_
+	rla
+	or l
+	ld l,a
+_
+	bit 2,(ix-vars+displayFlags)
+	jr z,_
+	rla
+	and l
+	ld l,a
+_
+	ld h,bit4LUT1 >> 8
+	ld a,(hl)
+	inc a
+	ld hl,tmpalettes
+	ld b,0
+_
+	ld c,(hl)
+	inc hl
+	dec a
+	jr z,_
+	add hl,bc
+	jr -_
+_
+	ld a,e
+	push af
+	ld de,rasterloop2
+	ldir
+	
+	ex de,hl
+	and 7
+	jr z,++_
+	bit 2,a
+	jr z,_
+	or $f8
+	ld (hl),$0f   ;rrca
+	inc hl
+	inc a
+	jr nz,$-4
+	jr ++_
+_
+	ld b,a
+	ld (hl),$07   ;rlca
+	inc hl
+	djnz $-3
+_
+	
+	ld a,(displayFlags)
+	rra
+	jr nc,no_gray_raster
+	
+	ex de,hl
+	ld hl,rastercodegray
+	ld bc,rastercodegraysize
+	ldir
+	
+	ld hl,(BGP_backup)
+	ld h,bit4LUT0 >> 8
+	ld a,(hl)
+	inc a
+	ld hl,tmpalettes
+	ld b,0
+_
+	ld c,(hl)
+	inc hl
+	dec a
+	jr z,_
+	add hl,bc
+	jr -_
+_
+	ldir
+	
+	ex de,hl
+	pop af
+	and 7
+	jr z,++_
+	bit 2,a
+	jr z,_
+	or $f8
+	ld (hl),$0f   ;rrca
+	inc hl
+	inc a
+	jr nz,$-4
+	jr ++_
+_
+	ld b,a
+	ld (hl),$07   ;rlca
+	inc hl
+	djnz $-3
+_
+	
+	push af
+no_gray_raster:
+	pop af
+	ex de,hl
+	ld hl,rastercode1
+	ld bc,rastercode1size
+	ldir
+	
+	ld a,rasterloop2-1 & $ff
+	sub e
+	ld (de),a
+	inc de
+	
+	;ld hl,rastercode2
+	ld bc,rastercode2size
+	ldir
+	ret
+	
+rastercode1:
+	inc l
+	exx
+	ld (de),a
+	xor (hl)
+	and c
+	xor (hl)
+	ld (hl),a
+	inc de
+	inc hl
+	exx
+	.db $10  ;djnz rasterloop2
+rastercode1size = $-rastercode1
+
+rastercode2:
+	ld a,e
+	add a,$20
+	ld l,a
+	ld a,d
+	jr nc,_
+	inc a
+	xor d
+	and %00000011
+	xor d
+_
+	ld h,a
+	ld b,8
+	xor a
+	cp c
+	jp nz,rasterloop1
+	jp rastercolumnend
+rastercode2size = $-rastercode2
+	
+rastercodegray:
+	dec l
+	exx
+	ld (de),a
+	xor (hl)
+	and c
+	xor (hl)
+	ld (hl),a
+	inc e
+	inc l
+	exx
+rastercodegraysize = $-rastercodegray
+	
+tmpalettes:
+#comment
+	.db 1
+	xor a
+	
+	.db 3
+	ld a,l
+	or h
+	cpl
+	
+	.db 3
+	ld a,h
+	cpl
+	and l
+	
+	.db 2
+	ld a,h
+	cpl
+	
+	.db 3
+	ld a,l
+	cpl
+	and h
+	
+	.db 2
+	ld a,l
+	cpl
+	
+	.db 2
+	ld a,l
+	xor h
+	
+	.db 3
+	ld a,l
+	and h
+	cpl
+	
+	.db 2
+	ld a,l
+	and h
+	
+	.db 3
+	ld a,l
+	xor h
+	cpl
+	
+	.db 1
+	ld a,l
+	
+	.db 3
+	ld a,h
+	cpl
+	or l
+	
+	.db 1
+	ld a,h
+	
+	.db 3
+	ld a,l
+	cpl
+	or h
+	
+	.db 2
+	ld a,l
+	or h
+	
+	.db 2
+	ld a,$FF
+#endcomment
+;#comment
+	.db 2
+	xor a
+	inc l
+	
+	.db 4
+	ld a,(hl)
+	inc l
+	or (hl)
+	cpl
+
+	.db 5
+	ld a,(hl)
+	inc l
+	cpl
+	or (hl)
+	cpl
+
+	.db 3
+	inc l
+	ld a,(hl)
+	cpl
+
+	.db 4
+	ld a,(hl)
+	inc l
+	cpl
+	and (hl)
+
+	.db 3
+	ld a,(hl)
+	inc l
+	cpl
+
+	.db 3
+	ld a,(hl)
+	inc l
+	xor (hl)
+
+	.db 4
+	ld a,(hl)
+	inc l
+	and (hl)
+	cpl
+
+	.db 3
+	ld a,(hl)
+	inc l
+	and (hl)
+
+	.db 4
+	ld a,(hl)
+	inc l
+	xor (hl)
+	cpl
+
+	.db 2
+	ld a,(hl)
+	inc l
+
+	.db 5
+	ld a,(hl)
+	inc l
+	cpl
+	and (hl)
+	cpl
+
+	.db 2
+	inc l
+	ld a,(hl)
+
+	.db 4
+	ld a,(hl)
+	inc l
+	cpl
+	or (hl)
+
+	.db 3
+	ld a,(hl)
+	inc l
+	or (hl)
+
+	.db 3
+	ld a,$ff
+	inc l
+;#endcomment
+	
+draw_sprites:
+	ld a,(sprite_detect)
+	and 2
+	ret z
+	xor a
+	ld (sprite_detect),a
+	ld hl,$FE9C
+	ld a,(screenHeight)
+	add a,16
+	ld c,a
+	ld a,(screenWidth)
+	add a,a
+	add a,a
+	add a,a
+	ld b,a
+	jr ++_
+draw_next_sprite:
+	pop bc
+draw_next_sprite_1:
+	pop hl
+draw_next_sprite_2:
+	ld a,l
+	cp $A0
+	jr nz,_
+	pop af
+_
+	sub 4
+	ld l,a
+	ret c
+	
+_
+	ld a,(hl)
+	sub (ix-vars+offsetY)
+	cp c
+	jr nc,draw_next_sprite_2
+	
+	ld d,9
+	bit 2,(ix-vars+LCDC_backup)
+	jr z,_
+	ld d,1
+_
+	sub d
+	jr c,draw_next_sprite_2
+	
+	push hl
+	inc hl
+	
+	ld d,bufferBase >> 8
+	bit 0,(ix-vars+displayFlags)
+	jr z,_
+	scf
+	adc a,a
+	jr nc,_
+	inc d
+_
+	ld e,a
+	
+	ld a,(hl)
+	sub (ix-vars+offsetX)
+	jr z,draw_next_sprite_1
+	cp b
+	jr nc,draw_next_sprite_1
+	
+	push bc
+	inc hl
+	push hl
+	ld hl,(bufferHeight)
+	ex de,hl
+	
+	sub 8
+	jr c,++_
+_
+	add hl,de
+	sub 8
+	jr nc,-_
+_
+	ex de,hl
+	
+	ld c,a
+	exx
+	add a,(rotLUT >> 8) + 8
+	ld b,a
+	xor 7
+	inc a
+	and %11110111
+	ld d,a
+	exx
+	ld a,$FF
+_
+	add a,a
+	inc c
+	jr nz,-_
+	ld iyh,a
+	cpl
+	ld iyl,a
+	
+	pop hl
+	ld a,(hl)
+	exx
+	ld h,tileLUT >> 8
+	ld l,a
+	ld a,(LCDC_backup)
+	bit 2,a
+	jr z,_
+	res 0,l
+_
+	bit 4,a
+	ld a,(hl)
+	jr nz,_
+	exx
+	ld a,l
+	exx
+	cp $A0
+	ld a,(hl)
+	jr c,_
+	dec h
+	dec h
+_
+	inc h
+	ld h,(hl)
+	ld l,a
+	exx
+	
+	inc hl
+	
+	ld a,(LCDC_backup)
+	add a,a
+	and 8
+	add a,8
+	ld b,a
+	
+	ld a,$2c ;inc l
+	bit 6,(hl)
+	jr nz,_
+	ld a,b
+	dec a
+	add a,a
+	exx
+	add a,l
+	ld l,a
+	exx
+	ld a,$2d ;dec l
+_
+	ld (sprite_flip_smc),a
+	ld (sprite_flip_smc+1),a
+	
+	bit 7,(hl)
+	jr z,_
+	ld a,sprite_priority_start & $FF
+	ld (sprite_next_smc),a
+	ld a,sprite_priority_start >> 8
+	ld (sprite_next_smc+1),a
+_
+	
+	bit 5,(hl)
+	jr z,_
+	exx
+	res 4,b
+	ld d,b
+	set 3,d
+	exx
+_
+	
+	bit 4,(hl)
+	ld a,l
+	ld hl,(OBP0)
+	jr z,_
+	ld hl,(OBP1)
+_
+	cp $A0
+	jr c,_
+	ld hl,(BGP)
+_
+	
+	sub 3
+	cp (ix-vars+sprite_to_track)
+	jr nz,_
+	ld a,(sprite_track_count)
+	dec a
+	jr z,_
+	ld (sprite_track_count),a
+	rra
+	rra
+	jr c,_
+	ld a,l
+	cpl
+	ld l,a
+_
+	
+	bit 1,(ix-vars+displayFlags)
+	jr z,_
+	ld a,l
+	rla
+	or l
+	ld l,a
+_
+	bit 2,(ix-vars+displayFlags)
+	jr z,_
+	ld a,l
+	rla
+	and l
+	ld l,a
+_
+	ld h,bit4LUT1 >> 8
+	push hl
+	ld a,(hl)
+	ld hl,spritepaletteLUT
+	and $0E
+	add a,l
+	ld l,a
+	jr nc,_
+	inc h
+_
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	ld (sprite_palette_smc),hl
+	pop hl
+	
+	ld a,(displayFlags)
+	rra
+	jr c,_
+	
+	ld hl,(bufferHeight)
+	xor a
+	sub l
+	ld l,a
+	sbc a,a
+	sub h
+	ld h,a
+	add hl,de
+	
+	ld a,spriteloop - (sprite_loop_smc + 1)
+	ld (sprite_loop_smc),a
+	jp spriteloop
+	
+_
+	dec h
+	ld a,(hl)
+	ld hl,spritepaletteLUT
+	and $0E
+	add a,l
+	ld l,a
+	jr nc,_
+	inc h
+_
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a
+	ld (sprite_palette_smc_gray),hl
+	
+	ld hl,(bufferHeight)
+	xor a
+	sub l
+	ld l,a
+	sbc a,a
+	sub h
+	ld h,a
+	add hl,de
+	
+	ld a,spriteloop_gray - (sprite_loop_smc + 1)
+	ld (sprite_loop_smc),a
+	jp spriteloop_gray
+	
+sprite_priority_start:
+	pop hl
+	pop de
+	ld a,e
+	push af
+	push hl
+	
+	ld a,(de)
+	add a,(ix-vars+SCY_backup)
+	or 7
+	inc a
+	ld c,a
+	inc e
+	ld a,(de)
+	add a,(ix-vars+SCX_backup)
+	or 7
+	inc a
+	ld b,a
+	
+	ld de,$FEA0
+sprite_priority_loop:
+	ld a,c
+	sub (ix-vars+SCY_backup)
+	ld (de),a
+	inc e
+	
+	ld a,b
+	sub (ix-vars+SCX_backup)
+	ld (de),a
+	inc e
+	
+	ld a,c
+	sub 16
+	ld l,a
+	ld h,$98 >> 2
+	bit 3,(ix-vars+LCDC_backup)
+	jr z,$+3
+	inc h
+	add hl,hl
+	add hl,hl
+	ld a,b
+	sub 8
+	rrca
+	rrca
+	rrca
+	or l
+	ld l,a
+	
+	ld a,(hl)
+	ld (de),a
+	inc e
+	xor a
+	ld (de),a
+	inc e
+	
+	ld a,c
+	sub (ix-vars+SCY_backup)
+	ld (de),a
+	inc e
+	
+	ld a,b
+	sub (ix-vars+SCX_backup)
+	sub 8
+	ld (de),a
+	inc e
+	
+	ld a,l
+	dec a
+	xor l
+	and %00011111
+	xor l
+	ld l,a
+	
+	ld a,(hl)
+	ld (de),a
+	inc e
+	xor a
+	ld (de),a
+	inc e
+	
+	ld a,c
+	sub 8
+	ld c,a
+	
+	bit 2,(ix-vars+LCDC_backup)
+	ld a,$B0
+	jr z,_
+	ld a,$B8
+_
+	cp e
+	jr nz,sprite_priority_loop
+	
+	ex de,hl
+	ex (sp),hl
+	push hl
+	ld hl,draw_next_sprite
+	ld (sprite_next_smc),hl
+	jp (hl)
+	
+	
+	
+spritepalette000:
+	ld c,a
+	ld a,(hl)
+	inc l
+	or (hl)
+	dec l
+	cpl
+	and c
+	ret
+	
+spritepalette001:
+	or (hl)
+	cpl
+	inc l
+	or (hl)
+	dec l
+	cpl
+	ret
+	
+spritepalette010:
+	inc l
+	or (hl)
+	dec l
+	cpl
+	or (hl)
+	cpl
+	ret
+	
+spritepalette011:
+	ld c,a
+	ld a,(hl)
+	inc l
+	or (hl)
+	cpl
+	and c
+	xor (hl)
+	dec l
+	xor (hl)
+	ret
+	
+spritepalette100:
+	or (hl)
+	inc l
+	or (hl)
+	xor (hl)
+	dec l
+	xor (hl)
+	ret
+	
+spritepalette101:
+	ld c,a
+	inc l
+	ld a,(hl)
+	dec l
+	cpl
+	and c
+	or (hl)
+	ret
+	
+spritepalette110:
+	ld c,a
+	ld a,(hl)
+	cpl
+	and c
+	inc l
+	or (hl)
+	dec l
+	ret
+	
+spritepalette111:
+	or (hl)
+	inc l
+	or (hl)
+	dec l
+	ret
+	
+spritepaletteLUT:
+	.dw spritepalette000
+	.dw spritepalette001
+	.dw spritepalette010
+	.dw spritepalette011
+	.dw spritepalette100
+	.dw spritepalette101
+	.dw spritepalette110
+	.dw spritepalette111
+	
+set_frameskip:
+	ld b,3+1
+	rra
+	jr nc,frameskip_set
+	ld b,6+1
+	rra
+	jr nc,frameskip_set
+	ld b,9+1
+	rra
+	jr nc,frameskip_set
+	ld a,$F7
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	ld b,2+1
+	rra
+	rra
+	jr nc,frameskip_set
+	ld b,5+1
+	rra
+	jr nc,frameskip_set
+	ld b,8+1
+	rra
+	jr nc,frameskip_set
+	ld a,$EF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	ld b,0+1
+	rra
+	jr nc,frameskip_set
+	inc b ;ld b,1+1
+	rra
+	jr nc,frameskip_set
+	ld b,4+1
+	rra
+	jr nc,frameskip_set
+	ld b,7+1
+	rra
+	ret c
+frameskip_set:
+	ld a,b
+	ld (frameskip),a
+	ret
+	
+move_view:
+	ld a,$FF
+	out (1),a
+	ld a,$FB
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	rra
+	jr nc,set_frameskip
+	
+	ld a,$FF
+	out (1),a
+	ld a,$F7
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	ld a,(decimalSave)
+	ld b,a
+	in a,(1)
+	ld (decimalSave),a
+	bit 2,a
+	jr z,++_
+	cpl
+	and b
+	rra
+	jr nc,+++_
+_
+	ld a,(sprite_to_track)
+	add a,4
+	ld (sprite_to_track),a
+	
+	cp $A0
+	jr z,trackingOff
+	
+	ld h,$FE
+	ld l,a
+	ld a,(hl)
+	dec a
+	cp 144 + 7
+	jr nc,-_
+	inc l
+	ld a,(hl)
+	dec a
+	cp 160 + 7
+	jr nc,-_
+	
+	ld (ix-vars+sprite_track_count),20
+_
+	ld a,(screenheight)
+	srl a
+	add a,8
+	ld (trackoffsetY),a
+	
+	ld a,(screenwidth)
+	dec a
+	add a,a
+	add a,a
+	ld (trackoffsetX),a
+_
+	
+	ld a,$FF
+	out (1),a
+	ld a,$EF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	rra
+	jr c,_
+trackingOff:
+	ld a,-4
+	ld (sprite_to_track),a
+_
+	
+	ld a,(sprite_to_track)
+	cp -4
+	jp z,not_tracking
+	
+	ld h,$FE
+	ld l,a
+	ld a,(hl)
+	dec a
+	cp 144 + 7
+	jr nc,not_tracking
+	inc l
+	ld a,(hl)
+	dec a
+	cp 160 + 7
+	jr nc,not_tracking
+	
+	ld a,$FF
+	out (1),a
+	ld a,$E3
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	ld h,a
+	
+	ld a,(trackoffsetY)
+	
+	bit 1,h
+	jr nz,_
+	sub 2
+_
+	
+	bit 3,h
+	jr nz,_
+	add a,2
+_
+	
+	ld (trackoffsetY),a
+	
+	ld a,$FF
+	out (1),a
+	ld a,$FB
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	
+	cpl
+	and %00001110
+	jr z,_
+	ld a,(trackoffsetX)
+	sub 2
+	ld (trackoffsetX),a
+_
+	
+	ld a,$FF
+	out (1),a
+	ld a,$EF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	
+	cpl
+	and %00001110
+	jr z,_
+	ld a,(trackoffsetX)
+	add a,2
+	ld (trackoffsetX),a
+_
+	
+	ld hl,(sprite_to_track)
+	ld h,$FE
+	ld a,(hl)
+	ld b,(ix-vars+trackoffsetY)
+	sub b
+	bit 7,b
+	jr nz,_
+	jr nc,_
+	xor a
+_
+	ld (offsetYFake),a
+	
+	inc l
+	ld a,(hl)
+	ld b,(ix-vars+trackoffsetX)
+	sub b
+	bit 7,b
+	jr nz,_
+	jr nc,_
+	xor a
+_
+	ld (offsetXFake),a
+	jp bound_view
+	
+	
+not_tracking:
+	ld b,1
+	
+	ld a,$FF
+	out (1),a
+	ld a,$E3
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	ld h,a
+	
+	bit 1,h
+	call z,move_view_down
+	
+	bit 3,h
+	call z,move_view_up
+	
+	ld a,$FF
+	out (1),a
+	ld a,$FB
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	
+	cpl
+	and %00001110
+	call nz,move_view_right
+	
+	ld a,$FF
+	out (1),a
+	ld a,$EF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	
+	cpl
+	and %00001110
+	call nz,move_view_left
+	ret
+	
+	
+move_view_up:
+	ld a,(offsetYFake)
+	sub b
+	jr nc,_
+	xor a
+_
+	ld (offsetYFake),a
+	ret
+	
+move_view_left:
+	ld a,(offsetXFake)
+	sub b
+	jr nc,_
+	xor a
+_
+	ld (offsetXFake),a
+	ret
+	
+move_view_down:
+	ld a,144
+	sub (ix-vars+screenheight)
+	ld c,a
+	ld a,(offsetYFake)
+	add a,b
+	cp c
+	jr c,_
+	ld a,c
+_
+	ld (offsetYFake),a
+	ret
+	
+move_view_right:
+	ld a,(screenwidth)
+	add a,a
+	add a,a
+	add a,a
+	cpl
+	add a,169
+	ld c,a
+	ld a,(offsetXFake)
+	add a,b
+	cp c
+	jr c,_
+	ld a,c
+_
+	ld (offsetXFake),a
+	ret
+	
+bound_view:
+	ld a,(displayFlagsFake)
+	rlca
+	rlca
+	rlca
+	and 6
+	ld hl,view_bounds
+	add a,l
+	ld l,a
+	jr nc,$+3
+	inc h
+	
+	;ld a,(screenwidth)
+	;add a,a
+	;add a,a
+	;add a,a
+	;cpl
+	;add a,169
+	
+	ld a,(hl)
+	cp (ix-vars+offsetXFake)
+	jr nc,_
+	ld (offsetXFake),a
+_
+	
+	;ld a,144
+	;sub (ix-vars+screenheight)
+	
+	inc hl
+	ld a,(hl)
+	
+	cp (ix-vars+offsetYFake)
+	ret nc
+	ld (offsetYFake),a
+	ret
+	
+view_bounds:
+	.db 160 - 96,  144 - 64
+	.db 160 - 128, 144 - 86
+	.db 160 - 160, 144 - 107
+	.db 160 - 160, 144 - 128
+	
+getAllMyKeys:
+	call set_zoom
+	call move_view
+	
+	ld hl,$FFFF
+	ld a,l
+	out (1),a
+	;Get arrow keys
+	dec a
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	
+	rra
+	jr c,$+4
+	res 3,l
+	
+	rra
+	jr c,$+4
+	res 1,l
+	
+	rra
+	jr c,$+11
+	bit 1,l
+	jr nz,$+6
+	set 1,l
+	jr $+3
+	dec l
+	
+	rra
+	jr c,$+12
+	bit 3,l
+	jr nz,$+6
+	set 3,l
+	jr $+4
+	res 2,l
+	
+	;Get A,B,SELECT,START
+	;Aka 2ND,ALPHA,XT0n,MODE
+	ld a,$BF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	rla
+	rla
+	;START/MODE
+	jr c,$+4
+	res 3,h
+	rla
+	;A/2ND
+	jr c,$+4
+	res 0,h
+	
+	ld a,$FF
+	out (1),a
+	ld a,$EF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	rla
+	;SELECT/XT0n
+	jr c,$+4
+	res 2,h
+	
+	ld a,$FF
+	out (1),a
+	ld a,$DF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	;B/ALPHA
+	rla
+	jr c,$+4
+	res 1,h
+	
+	ld (keys),hl
+	
+	ld a,$FF
+	out (1),a
+	ld a,$F7
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	rla
+	jp nc,toggleSound
+	ret
+	
+set_zoom:
+	ld a,$FF
+	out (1),a
+	ld a,$FD
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	ld b,(ix-vars+keySave)
+	ld (keySave),a
+	cpl
+	and b
+	ld b,a
+	
+	ld hl,mycontrast
+	ld a,(hl)
+	bit 3,(ix-vars+keySave)
+	jr nz,_
+	inc a
+	ret z
+	ld (hl),a
+	out ($10),a
+	ret
+_
+	bit 4,(ix-vars+keysave)
+	jr nz,_
+	dec a
+	cp $D8
+	ret c
+	ld (hl),a
+	out ($10),a
+	ret
+_
+	
+	push bc
+	bit 6,b
+	call nz,go_sleep
+	pop bc
+	
+;	bit 5,b
+;	jr z,_
+;	ld a,(gpu_delay_smc)
+;	xor 5^2
+;	ld (gpu_delay_smc),a
+;_
+	
+	ld hl,displayFlagsFake
+	ld a,(hl)
+	bit 1,b
+	jr z,_
+	sub %01000000
+	ret c
+	ld (hl),a
+	rlca
+	rlca
+	rlca
+	and 6
+	ld hl,trackzoomoffsets
+	add a,l
+	ld l,a
+	jr nc,$+3
+	inc h
+	ld a,(trackoffsetX)
+	sub (hl)
+	ld (trackoffsetX),a
+	ld a,(offsetXFake)
+	add a,(hl)
+	ld (offsetXFake),a
+	inc hl
+	ld a,(trackoffsetY)
+	sub (hl)
+	ld (trackoffsetY),a
+	ld a,(offsetYFake)
+	add a,(hl)
+	ld (offsetYFake),a
+	jp bound_view
+_
+	bit 2,b
+	jr z,_
+	add a,%01000000
+	ret c
+	ld (hl),a
+	rlca
+	rlca
+	rlca
+	and 6
+	ld hl,trackzoomoffsets-2
+	add a,l
+	ld l,a
+	jr nc,$+3
+	inc h
+	ld a,(trackoffsetX)
+	add a,(hl)
+	ld (trackoffsetX),a
+	ld a,(offsetXFake)
+	sub (hl)
+	jr nc,$+3
+	xor a
+	ld (offsetXFake),a
+	inc hl
+	ld a,(trackoffsetY)
+	add a,(hl)
+	ld (trackoffsetY),a
+	ld a,(offsetYFake)
+	sub (hl)
+	jr nc,$+3
+	xor a
+	ld (offsetYFake),a
+	jp bound_view
+_
+	
+	ld a,$FF
+	out (1),a
+	ld a,$BF
+	out (1),a
+	ex (sp),hl
+	ex (sp),hl
+	in a,(1)
+	
+	rra
+	jr c,_
+	ld a,(hl)
+	and %11111000
+	inc a
+	ld (hl),a
+	ret
+_
+	rra
+	jr c,_
+	ld a,(hl)
+	and %11111000
+	or %00000010
+	ld (hl),a
+	ret
+_
+	rra
+	jr c,_
+	ld a,(hl)
+	and %11111000
+	ld (hl),a
+	ret
+_
+	rra
+	ret c
+	ld a,(hl)
+	and %11111000
+	or %00000100
+	ld (hl),a
+	ret
+	
+trackzoomoffsets:
+	.db (128-96)/2, (86-64)/2
+	.db (160-128)/2, (107-86)/2
+	.db (160-160)/2, (128-107)/2
+	
+	;Input: B=(displayFlags)
+update_zoom_vars:
+	ld a,2
+	out (5),a
+	dec a
+	out ($10),a
+	ld (ditherCount),a
+	
+	ld a,b
+	rlca
+	rlca
+	and 7
+	ld b,a
+	jr nz,_
+	;Zoom 0 mono
+	ld hl,13*256 + 64
+	ld (screenHeight),hl
+	ld hl,64 + 15
+	ld (bufferHeight),hl
+	ld hl,safecopy_mono_0
+	ld (screenCopy+1),hl
+	ld hl,safecopy_mono_0_intermediate
+	ld (intermediateFrame+1),hl
+	ret
+_
+	djnz _
+	;Zoom 1 mono
+	ld hl,17*256 + 86
+	ld (screenHeight),hl
+	ld hl,86 + 15
+	ld (bufferHeight),hl
+	ld hl,safecopy_mono_1
+	ld (screenCopy+1),hl
+	ld hl,safecopy_mono_1_intermediate
+	ld (intermediateFrame+1),hl
+	in a,($10)
+	rla
+	jr c,$-3
+	xor a
+	out ($10),a
+	ret
+_
+	djnz _
+	;Zoom 2 mono
+	ld hl,21*256 + 107
+	ld (screenHeight),hl
+	ld hl,107 + 15
+	ld (bufferHeight),hl
+	ld hl,safecopy_mono_2
+	ld (screenCopy+1),hl
+	ld hl,safecopy_mono_2_intermediate
+	ld (intermediateFrame+1),hl
+	ret
+_
+	djnz _
+	;Zoom 3 mono
+	ld hl,21*256 + 128
+	ld (screenHeight),hl
+	ld hl,128 + 15
+	ld (bufferHeight),hl
+	ld hl,safecopy_mono_3
+	ld (screenCopy+1),hl
+	ld hl,safecopy_mono_3_intermediate
+	ld (intermediateFrame+1),hl
+	jp clear_screen_edges
+_
+	djnz _
+	;Zoom 0 gray
+	ld hl,13*256 + 64
+	ld (screenHeight),hl
+	ld hl,(64 + 15) * 2
+	ld (bufferHeight),hl
+	ld hl,safecopy_gray_0
+	ld (screenCopy+1),hl
+	ld hl,safecopy_gray_0_intermediate
+	ld (intermediateFrame+1),hl
+	ret
+_
+	djnz _
+	;Zoom 1 gray
+	ld hl,17*256 + 86
+	ld (screenHeight),hl
+	ld hl,(86 + 15) * 2
+	ld (bufferHeight),hl
+	ld hl,safecopy_gray_1
+	ld (screenCopy+1),hl
+	ld hl,safecopy_gray_1_intermediate
+	ld (intermediateFrame+1),hl
+	in a,($10)
+	rla
+	jr c,$-3
+	xor a
+	out ($10),a
+	ret
+_
+	djnz _
+	;Zoom 2 gray
+	ld hl,21*256 + 107
+	ld (screenHeight),hl
+	ld hl,(107 + 15) * 2
+	ld (bufferHeight),hl
+	ld hl,safecopy_gray_2
+	ld (screenCopy+1),hl
+	ld hl,safecopy_gray_2_intermediate
+	ld (intermediateFrame+1),hl
+	ret
+_
+	;Zoom 3 gray
+	ld hl,21*256 + 128
+	ld (screenHeight),hl
+	ld hl,(128 + 15)*2
+	ld (bufferHeight),hl
+	ld hl,safecopy_gray_3
+	ld (screenCopy+1),hl
+	ld hl,safecopy_gray_3_intermediate
+	ld (intermediateFrame+1),hl
+	jp clear_screen_edges

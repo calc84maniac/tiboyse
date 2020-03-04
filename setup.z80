@@ -1,0 +1,195 @@
+setup:
+	ld a,2
+	out (5),a
+	ld hl,render_ram_code
+	ld de,render_ram_code_start
+	ld bc,render_ram_code_size
+	ldir
+	
+	xor a
+	out (5),a
+	ld hl,$E000-1
+	ld de,page3code
+	ld bc,page3codesize + 1
+	or a ;sound off
+	call decompress_page3code
+	
+	ld hl,TimerInterruptBackup
+	ld de,TimerInterruptReplacement
+	ld bc,16
+	ldir
+	
+	ld a,(maxRamPage)
+	add a,$81
+	ld (firstInvalidRamPage),a
+	
+	ld a,(contrast)
+	add a,$D8
+	ld (mycontrast),a
+	ld a,(CartridgeType)
+	ld (mbc),a
+	
+	ld a,$80
+	out ($10),a
+	out ($28),a
+	ld a,$10
+	out ($27),a
+	
+	ld a,im2lut >> 8
+	ld i,a
+	im 2
+	xor a
+	out (4),a
+	inc a
+	out (3),a
+	
+	ld a,$44
+	out ($36),a
+	ld a,2
+	out ($37),a
+	dec a
+	out ($38),a
+	
+	ld hl,hiram_init
+	ld de,$ff00
+	ld bc,$0100
+	ldir
+	ld hl,$8000
+	ld (soundOutputs),hl
+	
+	ld c,$8F
+	call DisplayNintendo
+	
+	ld hl,$8000
+	ld de,$8001
+	ld bc,$1FFF
+	ld (hl),l
+	ldir
+	
+	ld a,5
+	out ($10),a
+	
+	call clear_screen_edges + (rompage3code - $4000)
+	
+	ld a,3
+	out ($20),a
+	ld a,$0c
+	out ($2c),a
+	
+	ld c,0
+	ld de,(opcodetable_B & $FF00) + (opcodetable >> 8)
+	ld iy,$FFFE
+	ld sp,$0100
+	
+	ld a,200
+	out ($38),a
+	
+	ld a,1
+	ex af,af'
+	
+	in a,(6)
+	ld (basepage),a
+	dec a
+	jp setcartrom_abs
+	
+	;Inputs: NC=sound off, C=sound on
+	;        HL=output location minus 1
+	;        DE=location of compressed code
+	;        BC=size of compressed code plus 1
+decompress_page3code:
+	push af
+decompressloop1:
+	cpi
+	jp po,decompressend
+	ex de,hl
+decompressloop2:
+	ld a,(hl)
+	and %11100111
+	cp $C7
+	jr z,_
+	ldi
+	jp pe,decompressloop2
+decompressend:
+	pop af
+	ret
+_
+	xor (hl)
+	inc hl
+	ex de,hl
+	jr nz,_
+	pop af
+	push af
+	jr c,decompresswithsound
+	ld (hl),$E1 ;pop hl
+	inc hl
+	ld (hl),$44 ;ld b,h
+	inc hl
+	ld (hl),$62 ;ld h,d
+	inc hl
+	ld (hl),$66 ;ld h,(hl)
+	inc hl
+	ld (hl),$E9 ;jp (hl)
+	inc hl
+	ld (hl),$00 ;nop
+	inc hl
+	ld (hl),$00 ;nop
+	jr decompressloop1
+_
+	cp $08
+	jr nz,_
+	ld (hl),$68 ;ld l,b
+	inc hl
+	ld (hl),$63 ;ld h,e
+	inc hl
+	ld (hl),$66 ;ld h,(hl)
+	inc hl
+	ld (hl),$E9 ;jp (hl)
+	jr decompressloop1
+_
+	cp $10
+	jr nz,_
+decompresswithsound:
+	ld (hl),$FB ;ei
+	inc hl
+	ld (hl),$E1 ;pop hl
+	inc hl
+	ld (hl),$F3 ;di
+	inc hl
+	ld (hl),$44 ;ld b,h
+	inc hl
+	ld (hl),$62 ;ld h,d
+	inc hl
+	ld (hl),$66 ;ld h,(hl)
+	inc hl
+	ld (hl),$E9 ;jp (hl)
+	jr decompressloop1
+_
+	ld a,(de)
+	inc de
+	dec bc
+	ld (hl),$FD
+	inc hl
+	ld (hl),$FD
+_
+	inc hl
+	ld (hl),$FD
+	dec a
+	jr nz,-_
+	jr decompressloop1
+	
+hiram_init:
+	.db 0,0,0,0,0,$00,$00,$00,0,0,0,0,0,0,0,0
+	.db $80,$BF,$F3,0,$BF,0,$3F,$00,0,$BF,$7F,$FF,$9F,0,$BF,0
+	.db $FF,$00,$00,$BF,$77,$F3,$F1,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db $91,0,$00,$00,0,$00,0,$FC,$FF,$FF,$00,$00,0,0,0,0
+	.block $b0
+	
+render_ram_code:
+	.org $DF00
+render_ram_code_start:
+	#include "render_ram.z80"
+render_ram_code_size = $ - render_ram_code_start
+	.org render_ram_code + render_ram_code_size
+	
+	.echo "RAM-based render code: ", render_ram_code_size
