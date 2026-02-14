@@ -195,16 +195,12 @@ safecopy_mono_0:
 	ld hl,bufferBase
 	ld e,$20
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,e
 	out ($10),a
 	ld bc,64*256+$11
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	outi
 	jr nz,-_
 	ld c,15
@@ -244,10 +240,7 @@ _
 	jr z,gray0loop2
 	
 gray0loop1:
-	in a,($10)
-	rla
-	jr c,gray0loop1
-	
+	call lcd_delay	
 	ld a,(hl)
 	inc l
 	xor (hl)
@@ -260,10 +253,7 @@ gray0loop1:
 	call z,advancecolumn
 	
 gray0loop2:
-	in a,($10)
-	rla
-	jr c,gray0loop2
-	
+	call lcd_delay	
 	ld a,(hl)
 	inc l
 	xor (hl)
@@ -276,10 +266,7 @@ gray0loop2:
 	call z,advancecolumn
 	
 gray0loop3:
-	in a,($10)
-	rla
-	jr c,gray0loop3
-	
+	call lcd_delay	
 	ld a,(hl)
 	inc l
 	xor (hl)
@@ -300,9 +287,7 @@ advancecolumn:
 	cp $2c
 	jr z,++_
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,e
 	out ($10),a
 	ret
@@ -339,9 +324,7 @@ mono1loop0:
 	push hl
 	push ix
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($10),a
 	ld b,64
@@ -357,9 +340,7 @@ _
 	xor (bit6LUT0^bit6LUT1)>>8
 	ld d,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,(de)
 	out ($11),a
 	djnz mono1loop1
@@ -420,9 +401,7 @@ advancecolumn1:
 	cp $30
 	jr z,++_
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($10),a
 	push hl
@@ -521,9 +500,7 @@ _
 mono2loop0:
 	push bc
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($10),a
 	
@@ -546,9 +523,7 @@ mono2loop1:
 	or c
 	ld c,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($11),a
 	inc ix
@@ -567,9 +542,7 @@ _
 	pop bc
 	inc c
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($10),a
 	push bc
@@ -602,9 +575,7 @@ mono2loop2:
 	or c
 	ld c,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($11),a
 	inc ix
@@ -623,9 +594,7 @@ _
 	pop bc
 	inc c
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($10),a
 	push bc
@@ -645,9 +614,7 @@ mono2loop3:
 	or (hl)
 	ld c,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($11),a
 	inc ix
@@ -705,9 +672,7 @@ _
 gray2loop0:
 	push af
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,c
 	out ($10),a
 	
@@ -716,9 +681,7 @@ _
 	inc c
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,$20
 	out ($10),a
 	
@@ -805,9 +768,7 @@ gray2loop1:
 	pop bc
 	ld e,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,e
 	out ($11),a
 	djnz gray2loop1
@@ -833,16 +794,12 @@ _
 	pop ix
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,5
 	out ($10),a
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,$80
 	out ($10),a
 	ret
@@ -896,16 +853,12 @@ _
 	inc de
 	ld l,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,l
 	out ($11),a
 	djnz --_
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	pop af
 	inc a
 	out ($10),a
@@ -1010,9 +963,7 @@ gray3loop1:
 	out ($11),a
 	djnz gray3loop1
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	pop af
 	inc a
 	out ($10),a
@@ -1033,33 +984,25 @@ clear_screen_edges:
 	out ($10),a
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,$20
 	out ($10),a
 	
 	ld b,64
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	xor a
 	out ($11),a
 	djnz -_
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	ld a,$2B
 	out ($10),a
 	
 	ld b,64
 _
-	in a,($10)
-	rla
-	jr c,-_
+	call lcd_delay
 	xor a
 	out ($11),a
 	djnz -_
@@ -2765,3 +2708,8 @@ _
 	ld hl,safecopy_gray_3_intermediate
 	ld (intermediateFrame+1),hl
 	jp clear_screen_edges
+
+lcd_delay:
+    call $+3
+    nop
+    ret
