@@ -193,20 +193,21 @@ clip_top:
 	
 safecopy_mono_0:
 	ld hl,bufferBase
-	ld e,$20
+	ld de,$0220
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and d
+	jr z,-_
 	ld a,e
 	out ($10),a
 	ld bc,64*256+$11
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and d
+	jr z,-_
 	outi
 	jr nz,-_
+
 	ld c,15
 	add hl,bc
 	inc e
@@ -234,7 +235,7 @@ safecopy_gray_0:
 _
 	ld bc,30
 	ld hl,bufferBase - 30
-	ld e,$1F
+	ld de,$021F
 	call advancecolumn
 	
 	ld a,(dithercount)
@@ -244,9 +245,9 @@ _
 	jr z,gray0loop2
 	
 gray0loop1:
-	in a,($10)
-	rla
-	jr c,gray0loop1
+	in a,(2)
+	and d
+	jr z,gray0loop1
 	
 	ld a,(hl)
 	inc l
@@ -260,9 +261,9 @@ gray0loop1:
 	call z,advancecolumn
 	
 gray0loop2:
-	in a,($10)
-	rla
-	jr c,gray0loop2
+	in a,(2)
+	and d
+	jr z,gray0loop2
 	
 	ld a,(hl)
 	inc l
@@ -276,9 +277,9 @@ gray0loop2:
 	call z,advancecolumn
 	
 gray0loop3:
-	in a,($10)
-	rla
-	jr c,gray0loop3
+	in a,(2)
+	and d
+	jr z,gray0loop3
 	
 	ld a,(hl)
 	inc l
@@ -300,9 +301,9 @@ advancecolumn:
 	cp $2c
 	jr z,++_
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and d
+	jr z,-_
 	ld a,e
 	out ($10),a
 	ret
@@ -339,9 +340,9 @@ mono1loop0:
 	push hl
 	push ix
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($10),a
 	ld b,64
@@ -357,9 +358,9 @@ _
 	xor (bit6LUT0^bit6LUT1)>>8
 	ld d,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,(de)
 	out ($11),a
 	djnz mono1loop1
@@ -420,9 +421,9 @@ advancecolumn1:
 	cp $30
 	jr z,++_
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($10),a
 	push hl
@@ -432,18 +433,19 @@ _
 	ret
 	
 gray1loop1:
-	in a,($10)
-	rla
-	jr c,gray1loop1
-	
 	ld a,(hl)
 	inc l
 	xor (hl)
 	and %10011001
 	xor (hl)
-	ld e,a
-	ld a,(de)
 	inc hl
+	ld e,a
+
+_
+	in a,(2)
+	and 2
+	jr z,-_
+	ld a,(de)
 	out ($11),a
 	inc l
 	inc hl
@@ -452,36 +454,38 @@ gray1loop1:
 	jp z,advancecolumn1
 	
 gray1loop2:
-	in a,($10)
-	rla
-	jr c,gray1loop2
-	
 	ld a,(hl)
 	inc l
 	xor (hl)
 	and %10101010
 	xor (hl)
-	ld e,a
-	ld a,(de)
 	inc hl
+	ld e,a
+	
+_
+	in a,(2)
+	and 2
+	jr z,-_
+	ld a,(de)
 	out ($11),a
 	
 	dec b
 	jp z,advancecolumn1
 	
 gray1loop3:
-	in a,($10)
-	rla
-	jr c,gray1loop3
-	
 	ld a,(hl)
 	inc l
 	xor (hl)
 	and %00110011
 	xor (hl)
-	ld e,a
-	ld a,(de)
 	inc hl
+	ld e,a
+	
+_
+	in a,(2)
+	and 2
+	jr z,-_
+	ld a,(de)
 	out ($11),a
 	
 	dec b
@@ -521,9 +525,9 @@ _
 mono2loop0:
 	push bc
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($10),a
 	
@@ -546,9 +550,9 @@ mono2loop1:
 	or c
 	ld c,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($11),a
 	inc ix
@@ -567,9 +571,9 @@ _
 	pop bc
 	inc c
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($10),a
 	push bc
@@ -602,9 +606,9 @@ mono2loop2:
 	or c
 	ld c,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($11),a
 	inc ix
@@ -623,9 +627,9 @@ _
 	pop bc
 	inc c
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($10),a
 	push bc
@@ -645,9 +649,9 @@ mono2loop3:
 	or (hl)
 	ld c,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($11),a
 	inc ix
@@ -705,9 +709,9 @@ _
 gray2loop0:
 	push af
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,c
 	out ($10),a
 	
@@ -716,9 +720,9 @@ _
 	inc c
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,$20
 	out ($10),a
 	
@@ -805,9 +809,9 @@ gray2loop1:
 	pop bc
 	ld e,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,e
 	out ($11),a
 	djnz gray2loop1
@@ -833,16 +837,16 @@ _
 	pop ix
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,5
 	out ($10),a
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,$80
 	out ($10),a
 	ret
@@ -896,16 +900,16 @@ _
 	inc de
 	ld l,a
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	ld a,l
 	out ($11),a
 	djnz --_
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	pop af
 	inc a
 	out ($10),a
@@ -1010,9 +1014,9 @@ gray3loop1:
 	out ($11),a
 	djnz gray3loop1
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and 2
+	jr z,-_
 	pop af
 	inc a
 	out ($10),a
@@ -1026,40 +1030,42 @@ _
 	ret
 	
 clear_screen_edges:
-	in a,($10)
-	rla
-	jr c,clear_screen_edges
+	ld c,2
+_
+	in a,(2)
+	and c
+	jr z,-_
 	ld a,$80
 	out ($10),a
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and c
+	jr z,-_
 	ld a,$20
 	out ($10),a
 	
 	ld b,64
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and c
+	jr z,-_
 	xor a
 	out ($11),a
 	djnz -_
 	
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and c
+	jr z,-_
 	ld a,$2B
 	out ($10),a
 	
 	ld b,64
 _
-	in a,($10)
-	rla
-	jr c,-_
+	in a,(2)
+	and c
+	jr z,-_
 	xor a
 	out ($11),a
 	djnz -_
@@ -2651,6 +2657,7 @@ trackzoomoffsets:
 	;Input: B=(displayFlags)
 update_zoom_vars:
 	ld a,2
+	ld c,a
 	out (5),a
 	dec a
 	out ($10),a
@@ -2683,9 +2690,9 @@ _
 	ld (screenCopy+1),hl
 	ld hl,safecopy_mono_1_intermediate
 	ld (intermediateFrame+1),hl
-	in a,($10)
-	rla
-	jr c,$-3
+	in a,(2)
+	and c
+	jr z,$-3
 	xor a
 	out ($10),a
 	ret
@@ -2736,9 +2743,9 @@ _
 	ld (screenCopy+1),hl
 	ld hl,safecopy_gray_1_intermediate
 	ld (intermediateFrame+1),hl
-	in a,($10)
-	rla
-	jr c,$-3
+	in a,(2)
+	and c
+	jr z,$-3
 	xor a
 	out ($10),a
 	ret

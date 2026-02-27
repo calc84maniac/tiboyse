@@ -895,33 +895,31 @@ _
 PutSplashScreen:
 	ld hl,SplashScreen
 	ld de,$8020
-_
-	in a,($10)
-	rla
-	jr c,-_
+	call LcdWait6MHz
 	ld a,7
 	out ($10),a
 PutSplashScreenRow:
 	ld c,$10
-_
-	in a,(c)
-	jp m,-_
+	call LcdWait6MHz
 	out (c),d
-_
-	in a,(c)
-	jp m,-_
+	call LcdWait6MHz
 	out (c),e
 	ld bc,$0C11
 PutSplashScreenByte:
-_
-	in a,($10)
-	rla
-	jr c,-_
+	call LcdWait6MHz
 	outi
 	jr nz,PutSplashScreenByte
 	inc d
 	bit 6,d
 	jr z,PutSplashScreenRow
+	ret
+	
+	; Wait ~100 cycles to be extra safe, this isn't speed critical display code
+LcdWait6MHz:
+	call _
+_
+	call _
+_
 	ret
 	
 SplashScreen:
@@ -1479,25 +1477,15 @@ _
 	jr nz,-_
 	
 DisplayNintendoLoop:
-_
-	in a,($10)
-	rla
-	jr c,-_
+	call LcdWait6MHz
 	ld a,c
 	out ($10),a
 	
-_
-	in a,($10)
-	rla
-	jr c,-_
+	call LcdWait6MHz
 	ld a,$21
 	out ($10),a
 	
-_
-	in a,($10)
-	rla
-	jr c,-_
-	
+	call LcdWait6MHz	
 	ld a,(hl)
 	inc hl
 	ld d,(hl)
@@ -1509,20 +1497,13 @@ _
 	rr d
 	rr e
 	jr c,-_
-	
 	out ($11),a
 	
-_
-	in a,($10)
-	rla
-	jr c,-_
+	call LcdWait6MHz
 	ld a,d
 	out ($11),a
 	
-_
-	in a,($10)
-	rla
-	jr c,-_
+	call LcdWait6MHz
 	ld a,e
 	out ($11),a
 	
