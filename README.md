@@ -190,18 +190,22 @@ Now grab the latest release of [SPASM-ng](https://github.com/alberthdev/spasm-ng
 
 For simplicity's sake, I'll call the name of the executable `spasm` below. Run the following to produce the emulator file:
 
-        spasm tiboyse.z80 tiboyse_makeapp/tiboy.bin
+        spasm tiboyse.z80 tiboyse_makeapp/tiboyse.bin
 
-To build the app generation tool, use the provided Visual Studio solution in the [tiboyse_makeapp](tiboyse_makeapp) directory,
+To build the app generation tool:
+
+On Windows, use the provided Visual Studio solution in the [tiboyse_makeapp](tiboyse_makeapp) directory,
 which will consume the output from SPASM as a PE resource to create a standalone executable.
 
-In theory, you can build the source for any platform with your C compiler of choice, by building `makeapp.cpp` and linking against
-librabbitsign from the submodule. In this case, the executable will read tiboyse.bin from its own directory at runtime.
+On Unix-based platforms, use the provided Makefile in the [tiboyse_makeapp](tiboyse_makeapp) directory.
+Since this builds librabbitsign, it requires GNU Autoconf and libgmp-dev to be installed.
+In this case, the executable will read tiboyse.bin from its own directory at runtime.
 
 ## Credits
 * calc84maniac for coding/design
 * thepenguin77 for clean flash unlock hack
 * FloppusMaximus for Rabbitsign (app signer). Source code can be found at <https://github.com/abbrev/rabbitsign>.
+* ti-kid for Makefile support
 * Omnimaga for all the awesome community support
 * Runer112 for yelling TI-BOYYYYYY at me periodically
 

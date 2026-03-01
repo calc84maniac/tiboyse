@@ -1,8 +1,6 @@
-# --- Compiler and flags -------------------------------------------------------
+# --- Compiler flags -------------------------------------------------------
 
-CC	   := gcc
-CXX	  := g++
-CFLAGS   := -O2 -Wall -I. -Irabbitsign/src
+CFLAGS   := -Oz -Wall -Irabbitsign/src
 CXXFLAGS := $(CFLAGS)
 LDFLAGS  :=
 LDLIBS   := -lgmp
@@ -33,7 +31,7 @@ tiboyse_makeapp: makeapp.o $(RABBIT_LIB)
 
 clean:
 	rm -f makeapp.o tiboyse_makeapp
-	$(MAKE) -C $(RABBIT_SRC) clean || true
+	$(MAKE) -C $(RABBIT_DIR) distclean || true
 
 .PHONY: all clean
 
