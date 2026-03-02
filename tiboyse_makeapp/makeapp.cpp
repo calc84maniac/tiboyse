@@ -1,5 +1,6 @@
 #include <cstring>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -16,7 +17,7 @@ const unsigned long TIBOY_SIZE = 0x4000 - 96;
 void wait()
 {
     std::cout << "< Press Enter to continue >";
-    getchar();
+    (void)getchar();
 }
 
 unsigned char getHex(char letter)
@@ -41,11 +42,11 @@ std::string escape(std::string& name)
 
 int main(int argc, char** argv)
 {
-    std::cout << "ROM to APP converter for TI-Boy Beta 0.2.04\n\n";
-	if (argc < 3)
-	{
-		atexit(wait);
-	}
+    std::cout << "ROM to APP converter for TI-Boy Beta 0.2.06\n\n";
+    if (argc < 3)
+    {
+        atexit(wait);
+    }
 
     std::string romfilename;
     if(argc >= 2)
@@ -69,16 +70,18 @@ int main(int argc, char** argv)
     unsigned long romfilesize = (unsigned long)romfile.tellg();
     romfile.seekg(0, std::ios::beg);
 
-    if (romfilesize & 0x3FFF)
+    unsigned long romfilesize_padded = romfilesize;
+    if (romfilesize == 0 || (romfilesize & 0x3FFF))
     {
         std::cout << "Warning, ROM file is not a multiple of 16KB!\n";
-        std::cout << "Ignoring last " << (romfilesize & 0x3FFF) << " bytes.\n\n";
-        romfilesize &= ~0x3FFF;
+        std::cout << "Final bank will be padded to 16KB.\n\n";
+        romfilesize_padded = (romfilesize | 0x3FFF) + 1;
     }
 
-    char* romdata = new char[romfilesize];
+    char* romdata = new char[romfilesize_padded];
     romfile.read(romdata, romfilesize);
     romfile.close();
+    memset(romdata + romfilesize, '\xFF', romfilesize_padded - romfilesize);
 
     char internal_name[16];
     strncpy(internal_name, romdata+0x134, 15);
@@ -93,10 +96,10 @@ int main(int argc, char** argv)
     }
     if(argc < 3 || appname.length() > maxName)
     {
-		if (argc >= 3)
-		{
-			atexit(wait);
-		}
+        if (argc >= 3)
+        {
+            atexit(wait);
+        }
         do
         {
             std::cout << "Enter a name for the APP (" << maxName << " char max): ";
@@ -107,42 +110,42 @@ int main(int argc, char** argv)
         while(appname.length() > maxName);
     }
 
-    std::string appPath = argv[0];
-    appPath = appPath.substr(0,appPath.find_last_of('\\')+1);
+    std::filesystem::path appPath = argv[0];
+    appPath.remove_filename();
 
 #ifdef USE_WINDOWS_RESOURCE
-	HRSRC resourceInfo = FindResource(nullptr, MAKEINTRESOURCE(TIBOYSE_RESOURCE), RT_RCDATA);
-	if (resourceInfo == nullptr)
-	{
-		std::cout << "Error: Could not find embedded tiboyse resource\n";
-		return EXIT_FAILURE;
-	}
-	if (SizeofResource(nullptr, resourceInfo) != TIBOY_SIZE)
-	{
-		std::cout << "Error: Embedded tiboyse resource seems to be corrupt (incorrect size)\n";
-		return EXIT_FAILURE;
-	}
-	HGLOBAL resourceData = LoadResource(nullptr, resourceInfo);
-	if (resourceData == nullptr)
-	{
-		std::cout << "Error: Failed to load embedded tiboyse resource\n";
-		return EXIT_FAILURE;
-	}
-	const void* resourcePtr = LockResource(resourceData);
-	if (resourcePtr == nullptr)
-	{
-		std::cout << "Error: Failed to lock embedded tiboyse resource\n";
-		return EXIT_FAILURE;
-	}
+    HRSRC resourceInfo = FindResource(nullptr, MAKEINTRESOURCE(TIBOYSE_RESOURCE), RT_RCDATA);
+    if (resourceInfo == nullptr)
+    {
+        std::cout << "Error: Could not find embedded tiboyse resource\n";
+        return EXIT_FAILURE;
+    }
+    if (SizeofResource(nullptr, resourceInfo) != TIBOY_SIZE)
+    {
+        std::cout << "Error: Embedded tiboyse resource seems to be corrupt (incorrect size)\n";
+        return EXIT_FAILURE;
+    }
+    HGLOBAL resourceData = LoadResource(nullptr, resourceInfo);
+    if (resourceData == nullptr)
+    {
+        std::cout << "Error: Failed to load embedded tiboyse resource\n";
+        return EXIT_FAILURE;
+    }
+    const void* resourcePtr = LockResource(resourceData);
+    if (resourcePtr == nullptr)
+    {
+        std::cout << "Error: Failed to lock embedded tiboyse resource\n";
+        return EXIT_FAILURE;
+    }
 #else
     std::ifstream tiboyfile;
-    tiboyfile.open((appPath+"tiboyse.bin").c_str(), std::ios::binary | std::ios::ate);
-    if(tiboyfile.fail())
+    tiboyfile.open(appPath / "tiboyse.bin", std::ios::binary | std::ios::ate);
+    if (tiboyfile.fail())
     {
         std::cout << "Error: Could not locate vital file tiboyse.bin\n";
         return EXIT_FAILURE;
     }
-    if((unsigned long)tiboyfile.tellg() != TIBOY_SIZE)
+    if ((unsigned long)tiboyfile.tellg() != TIBOY_SIZE)
     {
         std::cout << "Error: tiboyse.bin seems to be corrupt (incorrect file size)\n";
         return EXIT_FAILURE;
@@ -150,15 +153,15 @@ int main(int argc, char** argv)
     tiboyfile.seekg(0, std::ios::beg);
 #endif
 
-    unsigned long newsize = romfilesize;
-    unsigned char comp_byte = romdata[--newsize];
-    if(comp_byte == 0x00 || comp_byte == 0xFF)
-        while(romdata[--newsize] == comp_byte);
+    unsigned long newsize = romfilesize_padded;
+    char comp_byte = romdata[--newsize];
+    if (comp_byte == '\x00' || comp_byte == '\xFF')
+        while (newsize > 0 && romdata[--newsize] == comp_byte);
     romfilesize = (newsize | 0x3FFF) + 1;
 
-    char* appdata = (char*)malloc(TIBOY_SIZE + romfilesize);
+    char* appdata = new char[TIBOY_SIZE + romfilesize];
 #ifdef USE_WINDOWS_RESOURCE
-	memcpy(appdata, resourcePtr, TIBOY_SIZE);
+    memcpy(appdata, resourcePtr, TIBOY_SIZE);
 #else
     tiboyfile.read(appdata, TIBOY_SIZE);
     tiboyfile.close();
@@ -180,8 +183,12 @@ int main(int argc, char** argv)
 
     if (rs_sign_ti8x_app(prgm, key, 0) == RS_SUCCESS)
     {
-        std::string binout = appPath + appfilename + ".8xk";
+        std::filesystem::path binout = appPath / (appfilename + ".8xk");
+#ifdef _WIN32
+        FILE *appfile = _wfopen(binout.c_str(), L"wb");
+#else
         FILE *appfile = fopen(binout.c_str(), "wb");
+#endif
         if (rs_write_program_file(prgm, appfile, 0, 0, 0, (RSOutputFlags)0) == RS_SUCCESS)
         {
             std::cout << "\nGenerated a " << romfilesize + 0x4000 << " byte (" << romfilesize/0x4000+1 << " page) APP.\n\n";

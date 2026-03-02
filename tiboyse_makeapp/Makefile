@@ -1,7 +1,7 @@
 # --- Compiler flags -------------------------------------------------------
 
 CFLAGS   := -Oz -Wall -Irabbitsign/src
-CXXFLAGS := $(CFLAGS)
+CXXFLAGS := $(CFLAGS) --std=c++17
 LDFLAGS  :=
 LDLIBS   := -lgmp
 
