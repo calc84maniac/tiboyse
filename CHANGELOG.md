@@ -1,5 +1,14 @@
 # TI-Boy SE Changelog
 
+## Beta 0.2.06:
+* Fixed various hardware incompatibilities.
+  - Avoid polling LCD status port between command/data outputs to support LCD controllers in newer 84+ revisions.
+  - Disable all crystal timers on emulator exit, fixing a freeze when exiting with audio enabled on 83+SE.
+* tiboyse_makeapp.exe updates:
+  - Added makefile for Unix-based operating systems (thanks ti-kid!)
+  - Fixed relative path resolution for tiboyse.bin file when using forward slashes.
+  - ROMs which are not a multiple of 16KB are now padded instead of truncated.
+
 ## Beta 0.2.05:
 * Open-source release on github.
 * Fixed an issue causing incorrect output when building with the latest version of SPASM.

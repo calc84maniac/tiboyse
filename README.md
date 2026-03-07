@@ -212,4 +212,4 @@ In this case, the executable will read tiboyse.bin from its own directory at run
 ## License
 
 TI-Boy SE — a Game Boy emulator for the TI-84 Plus calculator family.
-Copyright © 2009 – 2020 Brendan Fletcher
+Copyright © 2009 – 2026 Brendan Fletcher
