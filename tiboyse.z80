@@ -611,6 +611,8 @@ Recover:
 	out ($20),a
 	out ($27),a
 	out ($28),a
+	out ($30),a
+	out ($33),a
 	out ($36),a
 	out (0),a
 	
